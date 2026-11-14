@@ -14,13 +14,31 @@ func TestMountedApps(t *testing.T) {
 		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
 		return w
 	}
-	for _, path := range []string{"/", "/style.css", "/healthz", "/formula-war/", "/formula-war/api/rooms"} {
+	for _, path := range []string{"/", "/style.css", "/healthz", "/formula-war/", "/formula-war/api/rooms", "/undercover/", "/undercover/style.css", "/undercover/app.js", "/undercover/api/info", "/secret-hitler/", "/secret-hitler/style.css", "/secret-hitler/app.js", "/secret-hitler/LICENSE"} {
 		if w := get(path); w.Code != 200 {
 			t.Fatalf("%s: %d", path, w.Code)
 		}
 	}
 	if w := get("/formula-war"); w.Code != 301 || w.Header().Get("Location") != "/formula-war/" {
 		t.Fatal("missing canonical redirect")
+	}
+	if w := get("/undercover"); w.Code != 301 || w.Header().Get("Location") != "/undercover/" {
+		t.Fatal("missing undercover redirect")
+	}
+	undercoverPage := get("/undercover/").Body.String()
+	for _, link := range []string{`href="/">Render home`, `href="/undercover/">谁是卧底首页`} {
+		if !strings.Contains(undercoverPage, link) {
+			t.Fatal("missing undercover navigation", link)
+		}
+	}
+	if w := get("/secret-hitler"); w.Code != 301 || w.Header().Get("Location") != "/secret-hitler/" {
+		t.Fatal("missing Secret Hitler redirect")
+	}
+	shPage := get("/secret-hitler/").Body.String()
+	for _, label := range []string{`href="/">Render home`, `href="/secret-hitler/">揭秘希特勒首页`, `id="rules-dialog"`} {
+		if !strings.Contains(shPage, label) {
+			t.Fatal("missing Chinese game navigation", label)
+		}
 	}
 	page := get("/formula-war/").Body.String()
 	for _, link := range []string{`class="site-home" href="/">Render home`, `id="home-link" class="game-home" href="/formula-war/">Formula War home`} {

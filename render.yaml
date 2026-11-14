@@ -2,6 +2,7 @@ services:
   - type: web
     name: render
     runtime: go
+    autoDeployTrigger: 'off'
     plan: free
     buildCommand: go build -trimpath -o bin/server .
     startCommand: ./bin/server

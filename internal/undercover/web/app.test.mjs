@@ -1,0 +1,52 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
+
+test('cards start covered, toggle without re-fetching to hide, and cover on round changes or switching away',async()=>{
+ const elements=new Map(),events=new Map(),requests=[];let poll;
+ const element=id=>{
+  if(!elements.has(id))elements.set(id,{hidden:id==='secret',textContent:'',value:'',attributes:{},setAttribute(k,v){this.attributes[k]=v;},showModal(){this.open=true;},close(){this.open=false;},append(){},replaceChildren(){}});
+  return elements.get(id);
+ };
+ const state={code:'ABC123',round:1,dealt:true,host:true,spies:1,blanks:0,players:[{name:'房主',host:true,you:true}]};
+ const document={hidden:false,getElementById:element,createElement:()=>({append(){}}),querySelectorAll:()=>[],addEventListener:(name,fn)=>events.set(name,fn)};
+ const context={document,location:{hash:'#ABC123',origin:'http://example.test'},window:{addEventListener:(name,fn)=>events.set(name,fn)},navigator:{},confirm:()=>{throw Error('native browser dialogs are forbidden');},setTimeout:()=>{},setInterval:fn=>{poll=fn;},fetch:async(url,options)=>{
+  requests.push({url,options});
+  const data=url.endsWith('/info')?{pairs:1000}:url.endsWith('/word')?{word:'苹果',blank:false,round:state.round}:structuredClone(state);
+  return {ok:true,json:async()=>data};
+ }};
+ vm.runInNewContext(await readFile(new URL('./app.js',import.meta.url),'utf8'),context);
+ await new Promise(setImmediate);
+ assert.equal(element('secret').hidden,true);
+ assert.equal(element('word').textContent,'');
+ assert.equal(requests.some(r=>r.url.endsWith('/word')),false,'polling must never fetch a private card');
+ await element('reveal').onclick();
+ assert.equal(element('word').textContent,'苹果');
+ assert.equal(element('secret').hidden,false);
+ assert.equal(element('reveal').attributes['aria-pressed'],'true');
+ const before=requests.length;
+ await element('reveal').onclick();
+ assert.equal(element('secret').hidden,true);
+ assert.equal(element('word').textContent,'');
+ assert.equal(requests.length,before,'hiding must work locally');
+ await element('reveal').onclick();
+ state.round++;
+ await poll();
+ assert.equal(element('secret').hidden,true,'a new round must not display the previous card');
+ await element('reveal').onclick();
+ document.hidden=true;events.get('visibilitychange')();
+ assert.equal(element('secret').hidden,true,'switching away must cover the card');
+ assert.equal(element('reveal').attributes['aria-pressed'],'false');
+ const resetRequests=()=>requests.filter(r=>r.url.endsWith('/reset')).length;
+ element('reset').onclick();
+ assert.equal(element('confirm-dialog').open,true);
+ assert.equal(resetRequests(),0,'opening the custom dialog must not end the round');
+ element('confirm-cancel').onclick();
+ assert.equal(element('confirm-dialog').open,false);
+ assert.equal(resetRequests(),0,'cancel must keep the current round');
+ element('reset').onclick();
+ await element('confirm-accept').onclick();
+ assert.equal(element('confirm-dialog').open,false);
+ assert.equal(resetRequests(),1,'custom confirmation must send exactly one reset');
+});

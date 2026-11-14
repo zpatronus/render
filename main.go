@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"render-projects/internal/formulawar"
+	"render-projects/internal/secrethitler"
+	"render-projects/internal/undercover"
 )
 
 //go:embed web/*
@@ -24,6 +26,14 @@ func handler() http.Handler {
 		http.Redirect(w, r, "/formula-war/", http.StatusMovedPermanently)
 	})
 	mux.Handle("/formula-war/", http.StripPrefix("/formula-war", formulawar.Handler("/formula-war")))
+	mux.HandleFunc("/undercover", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/undercover/", http.StatusMovedPermanently)
+	})
+	mux.Handle("/undercover/", http.StripPrefix("/undercover", undercover.Handler()))
+	mux.HandleFunc("/secret-hitler", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/secret-hitler/", http.StatusMovedPermanently)
+	})
+	mux.Handle("/secret-hitler/", http.StripPrefix("/secret-hitler", secrethitler.Handler()))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok\n")) })
 	files, _ := fs.Sub(web, "web")
 	static := http.FileServer(http.FS(files))

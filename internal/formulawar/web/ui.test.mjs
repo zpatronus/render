@@ -75,5 +75,5 @@ test('dark theme has readable text and team colors on its page and canvas surfac
   const a=luminance(colors['control-border']),b=luminance(colors[bg]);assert.ok((Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=3,`control boundary on ${bg}`);
  }
  const home=await readFile(new URL('../../../web/style.css',import.meta.url),'utf8');
- assert.match(home,/background:var\(--surface\);color:var\(--ink\)/);
+ assert.match(home,/background:\s*var\(--surface\);\s*color:\s*var\(--ink\)/);
 });
