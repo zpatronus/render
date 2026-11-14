@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: render
+    name: sidequests
     runtime: go
     autoDeployTrigger: 'off'
     plan: free

@@ -26,7 +26,7 @@ func TestMountedApps(t *testing.T) {
 		t.Fatal("missing undercover redirect")
 	}
 	undercoverPage := get("/undercover/").Body.String()
-	for _, link := range []string{`href="/">Render home`, `href="/undercover/">谁是卧底首页`} {
+	for _, link := range []string{`href="/">Sidequests home`, `href="/undercover/">谁是卧底首页`} {
 		if !strings.Contains(undercoverPage, link) {
 			t.Fatal("missing undercover navigation", link)
 		}
@@ -35,13 +35,13 @@ func TestMountedApps(t *testing.T) {
 		t.Fatal("missing Secret Hitler redirect")
 	}
 	shPage := get("/secret-hitler/").Body.String()
-	for _, label := range []string{`href="/">Render home`, `href="/secret-hitler/">揭秘希特勒首页`, `id="rules-dialog"`} {
+	for _, label := range []string{`href="/">Sidequests home`, `href="/secret-hitler/">揭秘希特勒首页`, `id="rules-dialog"`} {
 		if !strings.Contains(shPage, label) {
 			t.Fatal("missing Chinese game navigation", label)
 		}
 	}
 	page := get("/formula-war/").Body.String()
-	for _, link := range []string{`class="site-home" href="/">Render home`, `id="home-link" class="game-home" href="/formula-war/">Formula War home`} {
+	for _, link := range []string{`class="site-home" href="/">Sidequests home`, `id="home-link" class="game-home" href="/formula-war/">Formula War home`} {
 		if !strings.Contains(page, link) {
 			t.Fatalf("missing distinct home navigation: %s", link)
 		}

@@ -1,6 +1,6 @@
-# render
+# Sidequests
 
-One Go service for small projects on Render.
+Small games and tools in one Go service, deployable anywhere that runs Go.
 
 - `/` — project home
 - `/formula-war/` — Formula War
@@ -26,7 +26,11 @@ go build -trimpath -o bin/server .
 
 Node is only needed for browser-code tests. The Go binary embeds the frontend and word bank. Game artwork is cached for 24 hours with ETag validation; HTML, CSS, and JavaScript revalidate on reload, and room/private data is never cached. Rooms live in memory; run one instance. Restarting or redeploying clears them.
 
-## Render deployment
+## Deployment
+
+Build with `go build -trimpath -o bin/server .` and run `./bin/server`. The server listens on `PORT` (default `8080`) and exposes `/healthz`. Go buildpacks using `go install .` produce a `sidequests` executable.
+
+### Render
 
 Use `render.yaml`, or configure a Go web service with:
 
@@ -38,7 +42,7 @@ Use `render.yaml`, or configure a Go web service with:
 For version-triggered releases, set Render's **Auto-Deploy → Off**. Save its **Settings → Deploy Hook** URL as a GitHub Actions secret:
 
 ```sh
-gh secret set RENDER_DEPLOY_HOOK_URL --repo zpatronus/render
+gh secret set RENDER_DEPLOY_HOOK_URL --repo zpatronus/sidequests
 ```
 
 Change `DEPLOY_VERSION`, commit, and push to `main`. The workflow runs tests and a build, then requests deployment of that exact commit. Check rollout status in Render.

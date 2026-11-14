@@ -12,9 +12,9 @@ import (
 	"syscall"
 	"time"
 
-	"render-projects/internal/formulawar"
-	"render-projects/internal/secrethitler"
-	"render-projects/internal/undercover"
+	"github.com/zpatronus/sidequests/internal/formulawar"
+	"github.com/zpatronus/sidequests/internal/secrethitler"
+	"github.com/zpatronus/sidequests/internal/undercover"
 )
 
 //go:embed web/*
@@ -65,7 +65,7 @@ func main() {
 			log.Printf("shutdown: %v", err)
 		}
 	}()
-	log.Printf("render listening on %s", server.Addr)
+	log.Printf("sidequests listening on %s", server.Addr)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}

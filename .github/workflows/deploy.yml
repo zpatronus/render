@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: render-production
+  group: sidequests-render-production
   cancel-in-progress: false
 
 jobs:
