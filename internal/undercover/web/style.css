@@ -5,3 +5,5 @@
 .app-dialog h2{font-size:27px;line-height:1.4;margin:0 0 30px;letter-spacing:0}
 .dialog-actions{display:flex;justify-content:flex-end;gap:12px}
 .dialog-actions button{min-width:90px}
+
+body,button,input,a{font-variant-emoji:text}a,button,.arrow,.asterisk{font-family:Arial,"Helvetica Neue",Helvetica,sans-serif}

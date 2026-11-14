@@ -69,6 +69,11 @@ type privateNotes struct {
 	PeekElection   int
 }
 type event struct {
+	ID       int    `json:"id"`
+	Kind     string `json:"kind,omitempty"`
+	Policy   policy `json:"policy,omitempty"`
+	Target   string `json:"target,omitempty"`
+	Winner   role   `json:"winner,omitempty"`
 	Election int    `json:"election"`
 	Text     string `json:"text"`
 }
@@ -93,6 +98,7 @@ type game struct {
 	Winner                                    role
 	Reason                                    string
 	Events                                    []event
+	EventSequence                             int
 }
 
 func randomIndex(n int) int {
@@ -147,7 +153,8 @@ func newGame(members []member) (*game, error) {
 	return g, nil
 }
 func (g *game) log(text string) {
-	g.Events = append(g.Events, event{Election: g.Election, Text: text})
+	g.EventSequence++
+	g.Events = append(g.Events, event{ID: g.EventSequence, Election: g.Election, Text: text})
 	if len(g.Events) > 120 {
 		g.Events = append([]event(nil), g.Events[len(g.Events)-120:]...)
 	}
@@ -225,6 +232,8 @@ func (g *game) end(winner role, reason string) {
 	g.Power = ""
 	g.setPhase(finished)
 	g.log(reason)
+	g.Events[len(g.Events)-1].Kind = "victory"
+	g.Events[len(g.Events)-1].Winner = winner
 }
 func powerAt(players, policies int) power {
 	if policies == 4 || policies == 5 {
@@ -253,6 +262,8 @@ func (g *game) enact(p policy, chaos bool) {
 		g.FascistPolicies++
 		g.log("颁布法西斯政策")
 	}
+	g.Events[len(g.Events)-1].Kind = "policy"
+	g.Events[len(g.Events)-1].Policy = p
 	g.recycle()
 	if g.LiberalPolicies == 5 {
 		g.end(liberal, "已颁布 5 项自由派政策")
@@ -425,6 +436,8 @@ func (g *game) act(actorID, action, targetID string, card int, yes bool) error {
 		case "execute":
 			g.Players[target].Alive = false
 			g.log(g.Players[actor].Name + " 处决了 " + g.Players[target].Name)
+			g.Events[len(g.Events)-1].Kind = "execution"
+			g.Events[len(g.Events)-1].Target = g.Players[target].ID
 			if g.Players[target].Role == hitler {
 				g.end(liberal, "希特勒被处决")
 			} else {

@@ -71,3 +71,5 @@ button:disabled:hover{background:var(--input);border-color:var(--line)}
 .equation-keyboard fieldset:disabled [data-key]{color:var(--muted);background:var(--input);border-color:var(--line);cursor:not-allowed}
 .room-card h3,.room-heading h1{overflow-wrap:anywhere}
 @media(max-width:600px){.home-nav{flex-wrap:wrap;row-gap:4px}.room-heading>div:first-child{min-width:0}.room-heading .actions{flex-shrink:0;max-width:50%}}
+
+body,button,input,a{font-variant-emoji:text}a,button,.arrow,.asterisk{font-family:Arial,"Helvetica Neue",Helvetica,sans-serif}

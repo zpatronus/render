@@ -21,6 +21,7 @@ import (
 var assets embed.FS
 
 const roomIdleTTL = 15 * time.Minute
+const imageCacheTTL = 24 * time.Hour
 
 type room struct {
 	Code, Host string
@@ -80,7 +81,8 @@ func (s *server) handler() http.Handler {
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/art/") {
-			w.Header().Set("Cache-Control", "public, max-age=86400")
+			w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
+			w.Header().Set("Expires", s.now().Add(imageCacheTTL).UTC().Format(http.TimeFormat))
 		} else {
 			w.Header().Set("Cache-Control", "no-cache")
 		}

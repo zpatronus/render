@@ -82,3 +82,16 @@ header,main,footer{width:100%}main{flex:1}
  .track-heading{width:100%;margin-inline:0}
  .power-legend{width:532px;min-width:532px;margin-inline:0}
 }
+/* Show the entire policy boards; no horizontal pan is required. */
+.track{overflow:visible;max-width:100%}
+@media(max-width:760px){.board-surface{width:100%;min-width:0;margin-inline:0}.power-legend{width:100%;min-width:0;grid-template-columns:repeat(3,minmax(0,1fr));text-align:left}.track-heading{position:static;width:100%}}
+.role-cover{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;width:100%;border:0;background:transparent;padding:14px;font-size:23px;color:var(--lime)}
+.role-cover img{height:260px;max-width:85%;object-fit:contain;filter:drop-shadow(0 8px 8px #0006)}
+.event-dialog{text-align:center}.event-dialog h2{margin-bottom:24px}.event-dialog p{font-size:18px;line-height:1.7;color:var(--muted)}
+.notice-policy{display:block;width:190px;max-width:70%;margin:20px auto 30px;filter:drop-shadow(0 8px 10px #0006);animation:policy-enact 3s cubic-bezier(.18,.85,.25,1.12) both}
+.notice-avatar{display:block;width:140px;max-width:60%;margin:20px auto 28px;filter:grayscale(1)}
+.notice-victory{display:block;width:100%;height:auto;margin:18px auto 26px}
+#notice-done{min-width:150px;margin-top:15px}
+@media(prefers-reduced-motion:reduce){.notice-policy{animation:none!important}}
+
+body,button,input,a{font-variant-emoji:text}a,button,.arrow,.asterisk{font-family:Arial,"Helvetica Neue",Helvetica,sans-serif}

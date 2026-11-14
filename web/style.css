@@ -66,3 +66,5 @@ a:focus-visible { outline: 3px solid var(--lime); outline-offset: 6px; }
 .secret-hitler-project h2{font-family:Arial,"Microsoft YaHei",sans-serif;line-height:1.08}.secret-hitler-project h2 em{font-family:inherit;font-style:normal;color:var(--accent)}.election-art{height:240px;display:flex;align-items:center;justify-content:center;gap:20px;padding:25px}
 
 .election-art img{width:40%;max-width:185px;height:auto;filter:drop-shadow(0 8px 8px #0005);transform:rotate(-9deg)}.election-art img+img{transform:rotate(9deg)}
+
+body,button,input,a{font-variant-emoji:text}a,button,.arrow,.asterisk{font-family:Arial,"Helvetica Neue",Helvetica,sans-serif}

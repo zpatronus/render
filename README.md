@@ -24,7 +24,7 @@ node --test internal/*/web/*.test.mjs
 go build -trimpath -o bin/server .
 ```
 
-Node is only needed for browser-code tests. The Go binary embeds the frontend and word bank. Rooms live in memory; run one instance. Restarting or redeploying clears them.
+Node is only needed for browser-code tests. The Go binary embeds the frontend and word bank. Game artwork is cached for 24 hours with ETag validation; HTML, CSS, and JavaScript revalidate on reload, and room/private data is never cached. Rooms live in memory; run one instance. Restarting or redeploying clears them.
 
 ## Render deployment
 

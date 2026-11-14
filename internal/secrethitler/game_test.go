@@ -368,3 +368,31 @@ func TestRecycleMixesRemainingDeckAndDiscard(t *testing.T) {
 		t.Fatal("reshuffle changed policy types")
 	}
 }
+
+func TestImportantEventsAreStructuredOrderedAndKeepExecutionPrivate(t *testing.T) {
+	g := fixture(t, 7)
+	g.enact(liberalPolicy, false)
+	first := g.Events[len(g.Events)-1]
+	if first.Kind != "policy" || first.Policy != liberalPolicy || first.ID == 0 {
+		t.Fatal("missing policy event", first)
+	}
+	g.Phase = executive
+	g.Power = execute
+	g.President = 0
+	perform(t, g, 0, "execute", 1, 0, false)
+	execution := g.Events[len(g.Events)-1]
+	if execution.Kind != "execution" || execution.Target != "p1" || execution.ID <= first.ID {
+		t.Fatal("missing or unordered execution event", execution)
+	}
+	data, _ := json.Marshal(execution)
+	for _, secret := range []string{`"role"`, `"party"`, `"fascist"`} {
+		if strings.Contains(string(data), secret) {
+			t.Fatal("executed player's role leaked", string(data))
+		}
+	}
+	g.end(liberal, "终局")
+	last := g.Events[len(g.Events)-1]
+	if last.Kind != "victory" || last.Winner != liberal || last.ID <= execution.ID {
+		t.Fatal("missing victory event", last)
+	}
+}

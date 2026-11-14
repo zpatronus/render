@@ -4,23 +4,26 @@ const roleNames={liberal:'自由派',fascist:'法西斯',hitler:'希特勒'};
 const powerNames={investigate:'调查党派','special-election':'特别选举',peek:'查看政策',execute:'处决'};
 const phaseNames={nomination:'提名总理',voting:'政府选举','president-discard':'总统弃牌','chancellor-enact':'总理立法','veto-decision':'否决议程',executive:'总统权力','power-result':'总统查看结果',finished:'本局结束'};
 let room=null,busy=false,polling=false,revision=0,snapshot='',phaseKey='',avatar=1,pending=null;
+let noticeGame='',lastEvent=0,noticeQueue=[],activeNotice=null;
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
 const image=(src,alt,cls)=>{const e=el('img',undefined,cls);e.src=base+'art/'+src;e.alt=alt;return e;};
 const button=(text,fn,cls)=>{const b=el('button',text,cls);b.type='button';b.onclick=fn;return b;};
 const name=id=>room?.members.find(p=>p.id===id)?.name||'—';
 function notify(text=''){$('message').textContent=text;$('message').hidden=!text;}
-function hideIdentity(){$('identity').replaceChildren();$('identity').hidden=true;$('identity-toggle').textContent='查看身份';$('identity-dialog').close();$('identity-toggle').setAttribute('aria-expanded','false');}
+function coverIdentity(){$('identity').replaceChildren();$('identity').hidden=true;$('identity-reveal').hidden=false;$('identity-cover-label').textContent='点击查看身份';}
+function hideIdentity(){coverIdentity();$('identity-dialog').close();$('identity-toggle').setAttribute('aria-expanded','false');}
+function openIdentity(){coverIdentity();$('identity-dialog').showModal();$('identity-toggle').setAttribute('aria-expanded','true');}
 function closeConfirm(){pending=null;$('confirm-dialog').close();}
 function confirmAction(title,body,task,label='确认'){
  $('confirm-accept').hidden=false;
  $('confirm-title').textContent=title;$('confirm-body').replaceChildren();if(body)$('confirm-body').append(body);
  $('confirm-accept').textContent=label;pending=task;$('confirm-dialog').showModal();
 }
-$('confirm-cancel').onclick=closeConfirm;$('confirm-dialog').onclose=()=>{pending=null;};
+$('confirm-cancel').onclick=closeConfirm;$('confirm-dialog').onclose=()=>{pending=null;queueMicrotask(pumpNotices);};
 $('confirm-accept').onclick=()=>{const task=pending;closeConfirm();if(task)return run(task);};
-for(const kind of ['rules','credits','avatar']){$(kind+'-close').onclick=()=>$(kind+'-dialog').close();}
+for(const kind of ['rules','credits','avatar']){$(kind+'-close').onclick=()=>$(kind+'-dialog').close();$(kind+'-dialog').onclose=()=>queueMicrotask(pumpNotices);}
 $('identity-close').onclick=hideIdentity;
-$('identity-dialog').onclose=()=>{if(!$('identity-dialog').open)hideIdentity();};
+$('identity-dialog').onclose=()=>{if(!$('identity-dialog').open){coverIdentity();$('identity-toggle').setAttribute('aria-expanded','false');queueMicrotask(pumpNotices);}};
 $('rules-open').onclick=()=>$('rules-dialog').showModal();$('credits-open').onclick=()=>$('credits-dialog').showModal();
 async function api(endpoint,data){
  const response=await fetch(base+'api/'+endpoint,data===undefined?{cache:'no-store'}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
@@ -30,7 +33,7 @@ async function api(endpoint,data){
 async function run(task){if(busy)return;busy=true;revision++;notify();try{await task();}catch(error){notify(error.message);}finally{busy=false;}}
 function roomCode(){return location.hash.slice(1).toUpperCase();}
 function enter(next){location.hash=next.code;render(next);}
-function entry(){room=null;snapshot='';phaseKey='';hideIdentity();$('entry').hidden=false;$('room').hidden=true;}
+function entry(){noticeQueue=[];noticeGame='';lastEvent=0;activeNotice=null;$('notice-dialog').close();room=null;snapshot='';phaseKey='';hideIdentity();$('entry').hidden=false;$('room').hidden=true;}
 function credentials(){return {code:room.code,game:room.game?.id,step:room.game?.step};}
 async function act(action,extra={},captured=credentials()){render(await api(action,{...captured,...extra}));}
 function chooseAvatar(n){avatar=n;$('avatar-preview').src=base+'art/avatar-'+n+'.svg';for(const b of $('avatars').children)b.setAttribute('aria-pressed',String(Number(b.dataset.avatar)===n));try{localStorage.setItem('sh-avatar',String(n));}catch{}}
@@ -43,15 +46,19 @@ $('entry-form').onsubmit=event=>{
  const next=await api(kind,{name:nickname,avatar,code});try{localStorage.setItem('sh-name',nickname);}catch{}enter(next);});
 };
 function render(next){
- const encoded=JSON.stringify(next);if(encoded===snapshot)return;snapshot=encoded;room=next;
+ const encoded=JSON.stringify(next);if(encoded===snapshot)return;
+ const enteringGame=!!next.game&&room?.game?.id!==next.game.id;
+ snapshot=encoded;room=next;
  const key=next.code+':'+(next.game?next.game.id+':'+next.game.step:'lobby');
- if(key!==phaseKey){hideIdentity();if($('confirm-dialog').open)closeConfirm();phaseKey=key;}
+ if(key!==phaseKey){if(enteringGame||!next.game||next.game.phase==='finished')hideIdentity();if($('confirm-dialog').open)closeConfirm();phaseKey=key;}
  $('entry').hidden=true;$('room').hidden=false;$('room-code').textContent=next.code+(next.game?' · 第 '+next.game.election+' 届':'');
  $('lobby').hidden=!!next.game;$('game').hidden=!next.game;$('results').hidden=!next.game||next.game.phase!=='finished';
  $('phase-title').textContent=next.game?phaseNames[next.game.phase]:'等待玩家';
  $('identity-toggle').hidden=!next.game||next.game.phase==='finished';
- if(!next.game){renderLobby();return;}
+ if(!next.game){noticeQueue=[];noticeGame='';lastEvent=0;activeNotice=null;$('notice-dialog').close();renderLobby();return;}
  renderGame();
+ if(enteringGame&&next.game.phase!=='finished')openIdentity();
+ collectNotices(next.game);
 }
 function playerCard(p,lobby=false){
  const c=el('div',undefined,'player');c.dataset.player=p.id;c.append(image('avatar-'+p.avatar+'.svg',p.name));
@@ -98,14 +105,7 @@ function renderTrack(kind,total,count){
   if(i<=count)slot.append(image('board-policy-'+kind+'.png',roleNames[kind]+'政策'));
   parent.append(slot);
  }
- requestAnimationFrame(()=>{
-  const scroller=parent.closest('.track');if(!scroller||scroller.scrollWidth<=scroller.clientWidth)return;
-  if(!count){scroller.scrollTo({left:0,behavior:'auto'});return;}
-  const placed=parent.children[count-1],card=placed.getBoundingClientRect(),viewport=scroller.getBoundingClientRect();
-  const left=scroller.scrollLeft+card.left-viewport.left-(scroller.clientWidth-card.width)/2;
-  const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  scroller.scrollTo({left:Math.max(0,Math.min(left,scroller.scrollWidth-scroller.clientWidth)),behavior:reduce?'auto':'smooth'});
- });
+
 }
 function roleArt(role,avatar){return role==='hitler'?'role-hitler.png':'role-'+role+'-'+(((avatar||1)-1)%(role==='liberal'?6:3)+1)+'.png';}
 function renderGame(){
@@ -157,17 +157,41 @@ async function showHand(action){
 async function showPowerResult(){
  const capture=credentials(),data=await privateData(),body=el('div',undefined,'private-result');
  if(room.game.power==='investigate'){const result=data.investigations.at(-1);body.append(el('p',name(result.id)+'：'+roleNames[result.party]));const card=image('party-membership-'+result.party+'.png',roleNames[result.party]+'党派');card.className='confirmation-policy';body.append(card);}
- else{body.append(el('p','牌堆顶 → 第三张'));const cards=el('div',undefined,'peek-cards');for(const p of data.peek)cards.append(image('policy-'+p+'.png',roleNames[p]+'政策'));body.append(cards);}
+ else{body.append(el('p','牌堆顶 →︎ 第三张'));const cards=el('div',undefined,'peek-cards');for(const p of data.peek)cards.append(image('policy-'+p+'.png',roleNames[p]+'政策'));body.append(cards);}
  confirmAction('私密结果',body,()=>act('acknowledge',{},capture),'完成');
 }
-$('identity-toggle').onclick=()=>{
- if(!$('identity').hidden){hideIdentity();return;}
+$('identity-toggle').onclick=openIdentity;
+$('identity-reveal').onclick=()=>{
+ if(!$('identity').hidden){coverIdentity();return;}
  run(async()=>{const data=await privateData(),content=el('div',undefined,'identity-card');const documents=el('div',undefined,'identity-documents');documents.append(image(roleArt(data.role,room.members.find(p=>p.id===room.you)?.avatar),roleNames[data.role]),image('party-membership-'+data.party+'.png',roleNames[data.party]+'党派'));content.append(documents,el('h3',roleNames[data.role],'role-'+data.role));
  if(data.known.length){for(const p of data.known)content.append(el('p',name(p.id)+' · '+roleNames[p.role]));}
  else if(data.role==='hitler')content.append(el('p','本局你不知道其他法西斯是谁。'));
  if(data.investigations.length){const history=el('div',undefined,'private-history');history.append(el('h3','调查记录'));for(const r of data.investigations)history.append(el('p',name(r.id)+' · '+roleNames[r.party]));content.append(history);}
- $('identity').replaceChildren(content);$('identity').hidden=false;$('identity-dialog').showModal();$('identity-toggle').setAttribute('aria-expanded','true');});
+ $('identity').replaceChildren(content);$('identity').hidden=false;$('identity-reveal').hidden=true;});
 };
+function collectNotices(g){
+ if(noticeGame!==g.id){noticeGame=g.id;lastEvent=Math.max(0,...g.events.map(e=>e.id||0));noticeQueue=[];activeNotice=null;$('notice-dialog').close();return;}
+ for(const e of g.events){if(e.id>lastEvent&&['policy','execution','victory'].includes(e.kind))noticeQueue.push(e);lastEvent=Math.max(lastEvent,e.id||0);}
+ pumpNotices();
+}
+function pumpNotices(){
+ if(!room?.game||document.hidden||activeNotice||!noticeQueue.length)return;
+ if(['confirm','identity','rules','credits','avatar'].some(id=>$(id+'-dialog').open))return;
+ const e=noticeQueue.shift();activeNotice=e;const body=$('notice-body');body.replaceChildren();
+ if(e.kind==='policy'){
+  $('notice-title').textContent='颁布'+roleNames[e.policy]+'政策';body.append(image('policy-'+e.policy+'.png',roleNames[e.policy]+'政策','notice-policy'));
+ }else if(e.kind==='execution'){
+  const target=room.members.find(p=>p.id===e.target);$('notice-title').textContent=name(e.target)+' 被处决';
+  if(target)body.append(image('avatar-'+target.avatar+'.svg',target.name,'notice-avatar'));
+  body.append(el('p','该玩家已退出本局投票与任职。'));
+ }else{
+  $('notice-title').textContent=roleNames[e.winner]+'获胜';body.append(image('victory-'+e.winner+'-header.png',roleNames[e.winner]+'获胜','notice-victory'),el('p',e.text));
+ }
+ $('notice-dialog').showModal();
+}
+$('notice-done').onclick=()=>{$('notice-dialog').close();};
+$('notice-dialog').onclose=()=>{activeNotice=null;queueMicrotask(pumpNotices);};
+
 async function sync(){
  if(busy||polling||document.hidden)return;const code=roomCode();if(!/^[A-F0-9]{6}$/.test(code))return;
  polling=true;const started=revision;
@@ -177,5 +201,5 @@ async function sync(){
 }
 window.addEventListener('hashchange',()=>{if(room?.code!==roomCode())entry();$('code').value=roomCode();sync();});
 function coverSecrets(){hideIdentity();if($('confirm-dialog').open)closeConfirm();}
-document.addEventListener('visibilitychange',()=>{coverSecrets();if(!document.hidden)sync();});window.addEventListener('pagehide',coverSecrets);
+document.addEventListener('visibilitychange',()=>{coverSecrets();if(!document.hidden){pumpNotices();sync();}});window.addEventListener('pagehide',coverSecrets);
 $('code').value=roomCode();sync();setInterval(sync,3000);

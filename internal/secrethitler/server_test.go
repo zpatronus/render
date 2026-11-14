@@ -183,3 +183,54 @@ func TestAssetsAndBoundaryProtection(t *testing.T) {
 		t.Fatal("cross-site room creation allowed")
 	}
 }
+
+func TestImageCacheHasTwentyFourHourTTLAndConditionalRevalidation(t *testing.T) {
+	now := time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC)
+	s := &server{rooms: map[string]*room{}, now: func() time.Time { return now }}
+	h := s.handler()
+	for _, path := range []string{"/art/board-liberal.png", "/art/avatar-1.svg", "/art/role-envelope-front.png"} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		if w.Code != 200 || w.Body.Len() == 0 {
+			t.Fatal("missing image", path)
+		}
+		if w.Header().Get("Cache-Control") != "public, max-age=86400, immutable" {
+			t.Fatal("wrong image TTL", path, w.Header())
+		}
+		expires, err := http.ParseTime(w.Header().Get("Expires"))
+		if err != nil || !expires.Equal(now.Add(24*time.Hour)) {
+			t.Fatal("wrong expiry", path, expires, err)
+		}
+		etag := w.Header().Get("ETag")
+		if etag == "" {
+			t.Fatal("missing image ETag", path)
+		}
+		request := httptest.NewRequest("GET", path, nil)
+		request.Header.Set("If-None-Match", etag)
+		cached := httptest.NewRecorder()
+		h.ServeHTTP(cached, request)
+		if cached.Code != 304 || cached.Body.Len() != 0 {
+			t.Fatal("cached image transferred again", path)
+		}
+		if cached.Header().Get("Cache-Control") != w.Header().Get("Cache-Control") {
+			t.Fatal("304 lost cache policy", path)
+		}
+		head := httptest.NewRecorder()
+		h.ServeHTTP(head, httptest.NewRequest("HEAD", path, nil))
+		if head.Code != 200 || head.Body.Len() != 0 || head.Header().Get("ETag") != etag {
+			t.Fatal("HEAD cache headers differ", path)
+		}
+	}
+	for _, path := range []string{"/", "/app.js", "/style.css"} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		if w.Header().Get("Cache-Control") != "no-cache" || w.Header().Get("Expires") != "" {
+			t.Fatal("app updates should revalidate", path)
+		}
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/api/room?code=ABC123", nil))
+	if w.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("room data must not be cached")
+	}
+}

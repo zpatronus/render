@@ -20,7 +20,7 @@ async function harness(){
  const members=Array.from({length:5},(_,i)=>({id:'p'+i,name:'玩家'+i,avatar:i+1,alive:true,bot:i>0}));
  const state={code:'ABC123',host:'p0',you:'p0',bots:4,members,game:{id:'game-1',step:1,phase:'voting',election:1,president:'p1',nominee:'p0',liberalPolicies:0,fascistPolicies:0,tracker:0,deckCount:17,discardCount:0,power:'',track:['','','peek','execute','execute',''],voteCount:0,actions:['vote'],targets:[],events:[]}};
  let poll;const events=new Map(),requests=[];
- const context={document:{hidden:false,activeElement:null,getElementById:$,createElement:tag=>new Element(tag),addEventListener:(e,fn)=>events.set(e,fn)},window:{addEventListener:(e,fn)=>events.set(e,fn)},location:{hash:'#ABC123',origin:'http://example.test'},navigator:{},localStorage:{getItem:()=>null,setItem(){}},requestAnimationFrame:()=>0,setInterval:fn=>{poll=fn;},setTimeout:()=>{},fetch:async(url,options)=>{
+ const context={queueMicrotask,document:{hidden:false,activeElement:null,getElementById:$,createElement:tag=>new Element(tag),addEventListener:(e,fn)=>events.set(e,fn)},window:{addEventListener:(e,fn)=>events.set(e,fn)},location:{hash:'#ABC123',origin:'http://example.test'},navigator:{},localStorage:{getItem:()=>null,setItem(){}},setInterval:fn=>{poll=fn;},setTimeout:()=>{},fetch:async(url,options)=>{
   const body=options?.body?JSON.parse(options.body):null;requests.push({url,body});
   let data;
   if(url.includes('/private?'))data={game:state.game.id,step:state.game.step,id:'p0',role:'hitler',party:'fascist',known:[],investigations:[],peek:[],hand:state.game.phase==='president-discard'?['liberal','fascist','fascist']:[]};
@@ -32,7 +32,7 @@ async function harness(){
 }
 
 test('all avatars are unlocked and votes require explicit custom confirmation',async()=>{
- const h=await harness(),{$,requests}=h;
+ const h=await harness(),{$,requests}=h;$('identity-close').onclick();
  assert.equal($('avatars').children.length,20);
  assert.doesNotMatch(h.html,/id="ready"/);
  assert.doesNotMatch(h.source,/\b(?:confirm|alert|prompt)\s*\(/);
@@ -45,7 +45,7 @@ test('all avatars are unlocked and votes require explicit custom confirmation',a
 });
 
 test('card selection is deliberate, preserves its index, and needs a second confirmation',async()=>{
- const h=await harness(),{$,state,requests}=h;
+ const h=await harness(),{$,state,requests}=h;$('identity-close').onclick();
  state.game.phase='president-discard';state.game.step=2;state.game.actions=['discard'];await h.poll();
  await $('controls').children[0].onclick();
  const hand=$('confirm-body').children[0];assert.equal(hand.children.length,3);assert.equal($('confirm-accept').hidden,true);
@@ -57,9 +57,12 @@ test('card selection is deliberate, preserves its index, and needs a second conf
 
 test('identity modal and final role artwork use the authoritative role by player ID',async()=>{
  const h=await harness(),{$,state}=h;
- $('identity-toggle').onclick();await h.flush();assert.equal($('identity-dialog').open,true);assert.equal($('identity').querySelector('h3').textContent,'希特勒');assert.match($('identity').querySelector('img').src,/role-hitler\.png$/);
+ assert.equal($('identity-dialog').open,true,'show a covered role popup on entry');
+ assert.equal($('identity').hidden,true);assert.equal(h.requests.some(r=>r.url.includes('/private?')),false,'entry must not reveal or fetch the role');
+ $('identity-reveal').onclick();await h.flush();assert.equal($('identity').querySelector('h3').textContent,'希特勒');assert.match($('identity').querySelector('img').src,/role-hitler\.png$/);
  $('identity-close').onclick();assert.equal($('identity').hidden,true);
- $('identity-toggle').onclick();await h.flush();assert.equal($('identity-dialog').open,true,'identity should reopen on the first click');
+ $('identity-toggle').onclick();assert.equal($('identity-dialog').open,true);assert.equal($('identity').hidden,true,'reopening should start covered');
+ $('identity-reveal').onclick();await h.flush();
  state.game.phase='finished';state.game.step=20;state.game.actions=[];state.game.winner='fascist';state.game.reason='测试';
  const roles=['hitler','liberal','fascist','liberal','liberal'];state.game.results=state.members.map((p,i)=>({...p,role:roles[i],party:i===0||i===2?'fascist':'liberal'}));
  await h.poll();assert.equal($('identity-dialog').open,false);
@@ -68,9 +71,22 @@ test('identity modal and final role artwork use the authoritative role by player
 });
 
 test('unchanged polls do not replay card animations and stale confirmations are dismissed',async()=>{
- const h=await harness(),{$,state}=h;
+ const h=await harness(),{$,state}=h;$('identity-close').onclick();
  const first=$('liberal-track').children[0];state.game.voteCount=1;await h.poll();assert.equal($('liberal-track').children[0],first);
  $('controls').children[0].children[0].onclick();assert.equal($('confirm-dialog').open,true);
  state.game.step++;state.game.phase='nomination';state.game.actions=[];await h.poll();assert.equal($('confirm-dialog').open,false);
  state.game.liberalPolicies=1;await h.poll();assert.match($('liberal-track').children[0].className,/is-new/);
+});
+
+test('important public events queue once and never reveal executed roles',async()=>{
+ const h=await harness(),{$,state}=h;
+ state.game.events=[{id:1,kind:'policy',policy:'fascist',election:1,text:'颁布法西斯政策'}];await h.poll();
+ assert.equal($('notice-dialog').open,false,'identity popup takes priority');
+ $('identity-close').onclick();await h.flush();
+ assert.equal($('notice-dialog').open,true);assert.equal($('notice-title').textContent,'颁布法西斯政策');assert.match($('notice-body').querySelector('img').src,/policy-fascist/);
+ state.game.events.push({id:2,kind:'execution',target:'p2',election:2,text:'玩家2被处决'});await h.poll();
+ assert.equal($('notice-title').textContent,'颁布法西斯政策','new events should not replace the current notice');
+ $('notice-done').onclick();await h.flush();
+ assert.equal($('notice-title').textContent,'玩家2 被处决');assert.match($('notice-body').querySelector('img').src,/avatar-3/);assert.equal($('notice-body').querySelector('.result-role'),null);
+ $('notice-done').onclick();await h.flush();await h.poll();assert.equal($('notice-dialog').open,false,'polling must not replay a consumed event');
 });
