@@ -164,25 +164,61 @@ func advanceBots(g *game) {
 	}
 }
 
-// Continue bot-only phases independently of browsers and HTTP requests.
-// Called with the server mutex held.
+// Execute one visible operation per thinking interval. HTTP reads never play bots.
+const botActionDelay = 2500 * time.Millisecond
+const botRevealDelay = 3500 * time.Millisecond
+
+func nextBotMove(g *game) (string, botMove, bool) {
+	if g == nil || g.Phase == finished {
+		return "", botMove{}, false
+	}
+	for _, p := range g.Players {
+		if !p.Bot || !p.Alive {
+			continue
+		}
+		if move, ok := botDecision(g.publicView(p.ID), g.privateView(p.ID)); ok {
+			return p.ID, move, true
+		}
+	}
+	return "", botMove{}, false
+}
+
+// Called with the server mutex held. Delays never hold the mutex.
 func (s *server) advanceRoomBots(r *room) {
-	advanceBots(r.Game)
-	if r.botsRunning || !botsPending(r.Game) {
+	if r.botsRunning || r.Game == nil || !botsPending(r.Game) {
 		return
 	}
 	r.botsRunning = true
 	go func() {
 		for {
-			time.Sleep(10 * time.Millisecond)
 			s.mu.Lock()
-			if s.rooms[r.Code] != r || r.Game == nil || !botsPending(r.Game) {
+			g := r.Game
+			if s.rooms[r.Code] != r || g == nil || !botsPending(g) {
 				r.botsRunning = false
 				s.mu.Unlock()
 				return
 			}
-			advanceBots(r.Game)
-			r.notify()
+			step := g.Step
+			delay := botActionDelay
+			if len(g.Events) > 0 {
+				kind := g.Events[len(g.Events)-1].Kind
+				if kind == "policy" || kind == "execution" {
+					delay = botRevealDelay
+				}
+			}
+			s.mu.Unlock()
+			time.Sleep(delay)
+			s.mu.Lock()
+			if s.rooms[r.Code] != r || r.Game != g || g.Step != step {
+				s.mu.Unlock()
+				continue
+			}
+			id, move, ok := nextBotMove(g)
+			if ok {
+				if err := g.act(id, move.Action, move.Target, move.Card, move.Yes); err == nil {
+					r.notify()
+				}
+			}
 			s.mu.Unlock()
 		}
 	}()

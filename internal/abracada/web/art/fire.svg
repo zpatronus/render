@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 248" fill="none" stroke-linecap="round" stroke-linejoin="round" role="img" aria-labelledby="title desc"><title id="title">火球术</title><desc id="desc">赤红焰尾卷成旋涡，金色火球包裹炽白火芯。</desc><defs><linearGradient id="fire-g" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#f8c064"/><stop offset="1" stop-color="#d6543d"/></linearGradient><linearGradient id="fire-h" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#e77d48"/><stop offset="1" stop-color="#87383d"/></linearGradient><linearGradient id="fire-k" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#fff4b8"/><stop offset="1" stop-color="#f6b65b"/></linearGradient></defs>
+<circle cx="121" cy="128" r="87" fill="#f5b766" opacity=".07"/>
+<path d="M177 20c-10 31-5 49 18 72 32 34 31 82 5 109-33 35-90 37-125 13-38-26-45-64-27-99-1 26 14 38 26 38-20-49 7-76 28-94-9 34 8 49 22 47-6-32 22-62 53-86Z" fill="url(#fire-h)" stroke="#512e32" stroke-width="5"/>
+<path d="M167 58c-4 30 16 46 24 69 14 40-9 81-48 87-45 8-77-23-73-54 8 15 24 22 36 19-23-23-24-49-9-68-1 17 11 25 23 28-7-38 26-64 47-81Z" fill="url(#fire-g)"/>
+<path d="M145 112c-3 19 14 34 23 47 14 21 2 43-21 48-30 7-54-18-46-38 5 10 15 13 23 11-13-21 4-48 21-68Z" fill="url(#fire-k)"/>
+<path d="M139 162c0 12 16 13 13 27-2 12-19 14-26 5-8-11 4-24 13-32Z" fill="#fff5cb"/>
+<path d="M172 92q25 30 20 57M65 188q9 20 28 28" stroke="#ffce82" stroke-width="3"/>
+<path d="M37 53q17 11 13 27-14-6-13-27Zm164 6q-10-13-4-24 12 10 4 24ZM30 156q-11-10-7-22 13 5 7 22Z" fill="#ee9a58"/>
+<path d="M76 19 Q77 24 82 25 Q77 26 76 31 Q75 26 70 25 Q75 24 76 19Z" fill="#f7ce8a"/><path d="M211 216 Q212 220 216 221 Q212 222 211 226 Q210 222 206 221 Q210 220 211 216Z" fill="#f7ce8a"/></svg>

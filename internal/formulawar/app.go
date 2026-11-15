@@ -19,7 +19,7 @@ import (
 //go:embed web/index.html web/style.css web/app.mjs web/game.mjs web/ui.mjs
 var assets embed.FS
 
-const idleTTL = 10 * time.Minute
+const idleTTL = 15 * time.Minute
 const roomTTL = 2 * time.Hour
 const maxRooms = 100
 const obstacleCount = 15

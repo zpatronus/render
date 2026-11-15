@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/zpatronus/sidequests/internal/abracada"
 	"github.com/zpatronus/sidequests/internal/formulawar"
 	"github.com/zpatronus/sidequests/internal/secrethitler"
 	"github.com/zpatronus/sidequests/internal/undercover"
@@ -22,6 +23,8 @@ var web embed.FS
 
 func handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/abracada", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/abracada/", 301) })
+	mux.Handle("/abracada/", http.StripPrefix("/abracada", abracada.Handler()))
 	mux.HandleFunc("/formula-war", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/formula-war/", http.StatusMovedPermanently)
 	})

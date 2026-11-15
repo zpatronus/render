@@ -14,7 +14,7 @@ func TestMountedApps(t *testing.T) {
 		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
 		return w
 	}
-	for _, path := range []string{"/", "/favicon.png", "/style.css", "/healthz", "/formula-war/", "/formula-war/api/rooms", "/undercover/", "/undercover/style.css", "/undercover/app.js", "/undercover/api/info", "/secret-hitler/", "/secret-hitler/style.css", "/secret-hitler/app.js", "/secret-hitler/LICENSE"} {
+	for _, path := range []string{"/abracada/", "/abracada/style.css", "/abracada/app.js", "/abracada/layout.mjs", "/abracada/art/dragon.svg", "/", "/favicon.png", "/style.css", "/healthz", "/formula-war/", "/formula-war/api/rooms", "/undercover/", "/undercover/style.css", "/undercover/app.js", "/undercover/api/info", "/secret-hitler/", "/secret-hitler/style.css", "/secret-hitler/app.js", "/secret-hitler/LICENSE"} {
 		if w := get(path); w.Code != 200 {
 			t.Fatalf("%s: %d", path, w.Code)
 		}
@@ -22,7 +22,7 @@ func TestMountedApps(t *testing.T) {
 	if w := get("/favicon.png"); w.Header().Get("Content-Type") != "image/png" {
 		t.Fatal("favicon must be served as PNG")
 	}
-	for _, path := range []string{"/", "/formula-war/", "/undercover/", "/secret-hitler/"} {
+	for _, path := range []string{"/abracada/", "/", "/formula-war/", "/undercover/", "/secret-hitler/"} {
 		if !strings.Contains(get(path).Body.String(), `rel="icon" type="image/png" href="/favicon.png"`) {
 			t.Fatalf("missing shared favicon on %s", path)
 		}

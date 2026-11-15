@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 248" fill="none" stroke-linecap="round" stroke-linejoin="round" role="img" aria-labelledby="title desc"><title id="title">闪电风暴</title><desc id="desc">层叠的靛紫雷云中，两道金色闪电劈向两侧。</desc><defs><linearGradient id="storm-g" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#959db8"/><stop offset="1" stop-color="#42465d"/></linearGradient><linearGradient id="storm-h" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#636c91"/><stop offset="1" stop-color="#33384f"/></linearGradient><linearGradient id="storm-k" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#fff0a7"/><stop offset="1" stop-color="#e1a143"/></linearGradient></defs>
+<circle cx="121" cy="115" r="86" fill="#ddbd78" opacity=".06"/>
+<path d="M55 129c-39-3-42-49-10-59 1-34 44-49 69-23 21-30 66-13 69 17 34-3 53 43 23 62Z" fill="url(#storm-h)" stroke="#2b3045" stroke-width="5"/>
+<path d="M38 99c-6-21 15-34 32-26 2-28 40-34 54-10 26-24 58-4 54 19 20-5 35 12 29 27" fill="url(#storm-g)"/>
+<path d="M50 86q13-7 23 1m17-24q15-9 26 3m27 7q15-8 27 7" stroke="#c2c1d1" stroke-width="3"/>
+<path d="m82 109-27 55h27l-13 59 54-77H96l20-37Z" fill="url(#storm-k)" stroke="#624f40" stroke-width="4"/>
+<path d="m158 115-23 42h22l-9 45 47-65h-25l13-22Z" fill="url(#storm-k)" stroke="#624f40" stroke-width="4"/>
+<path d="m83 126-12 26h18m71-24-8 16h14" stroke="#fff9ca" stroke-width="3"/>
+<path d="m33 139-8 13m8 15-6 11m174-26 9 11m-12 13 6 12" stroke="#a8c2d1" stroke-width="4"/>
+<path d="M23 41 Q24 46 29 47 Q24 48 23 53 Q22 48 17 47 Q22 46 23 41Z" fill="#f4dfa3"/><path d="M207 31 Q208 38 215 39 Q208 40 207 47 Q206 40 199 39 Q206 38 207 31Z" fill="#f4dfa3"/><path d="M117 215 Q118 219 122 220 Q118 221 117 225 Q116 221 112 220 Q116 219 117 215Z" fill="#f4dfa3"/></svg>

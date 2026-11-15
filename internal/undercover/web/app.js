@@ -29,7 +29,8 @@ async function action(task){
  document.querySelectorAll('button').forEach(b=>b.disabled=true);
  try{await task();}catch(e){message(e.message);}finally{busy=false;connectStream(true);document.querySelectorAll('button').forEach(b=>b.disabled=false);}
 }
-function enter(next){location.hash=next.code;render(next);}
+try{const nickname=localStorage.getItem('undercover-name')||'';$('host-name').value=nickname;$('guest-name').value=nickname;}catch{}
+function enter(next){const nickname=next.players.find(p=>p.you)?.name;if(nickname){try{localStorage.setItem('undercover-name',nickname);}catch{}$('host-name').value=nickname;$('guest-name').value=nickname;}location.hash=next.code;render(next);}
 $('create').onsubmit=e=>{e.preventDefault();action(async()=>enter(await api('create',{name:$('host-name').value})));};
 $('join').onsubmit=e=>{e.preventDefault();action(async()=>enter(await api('join',{name:$('guest-name').value,code:$('code').value})));};
 $('deal').onsubmit=e=>{e.preventDefault();action(async()=>render(await api('deal',{code:room.code,round:room.round,spies:Number($('room-spies').value),blanks:Number($('room-blanks').value)})));};

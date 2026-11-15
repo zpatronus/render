@@ -106,3 +106,8 @@ body,button,input,a{font-variant-emoji:text}a,button,.arrow,.asterisk{font-famil
  .lobby-heading h2{white-space:nowrap}
  .lobby-heading .actions{min-width:0}
 }
+
+/* Suppress browser tap flashes and accidental selection on game controls. */
+*{-webkit-tap-highlight-color:transparent}
+button,button *,a,summary,[role="button"],.stone,.count-slot,.playing-card,.player,.word-card,canvas{-webkit-user-select:none;user-select:none}
+button img,.stone img,.playing-card img,.player img{-webkit-user-drag:none}

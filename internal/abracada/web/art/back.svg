@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 248" fill="none" stroke-linecap="round" stroke-linejoin="round" role="img" aria-labelledby="title desc"><title id="title">魔法石背面</title><desc id="desc">双层金色边框围绕六芒星与闭合的魔法之眼，不透露任何法术信息。</desc><defs><linearGradient id="back-g" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#495b57"/><stop offset="1" stop-color="#253b3a"/></linearGradient><linearGradient id="back-h" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#eed5a0"/><stop offset="1" stop-color="#aa8350"/></linearGradient></defs>
+<path d="M56 13h128l34 34v154l-34 34H56l-34-34V47Z" fill="url(#back-g)" stroke="#a98b5a" stroke-width="4"/>
+<path d="M60 24h120l27 28v143l-27 28H60l-27-28V52Z" stroke="#d0af72" stroke-opacity=".6" stroke-width="1.5"/>
+<circle cx="120" cy="124" r="70" stroke="#b39768" stroke-width="2"/><circle cx="120" cy="124" r="61" stroke="#b39768" stroke-opacity=".5" stroke-dasharray="2 7"/>
+<path d="m120 52 62 108H58Zm0 144L58 88h124Z" fill="#c4a678" fill-opacity=".06" stroke="#c6aa78" stroke-width="2"/>
+<path d="M75 124q45-45 90 0-45 45-90 0Z" fill="#314743" stroke="url(#back-h)" stroke-width="3"/>
+<path d="M86 124q34-21 68 0" stroke="#e3c990" stroke-width="3"/><path d="m95 134-4 6m16-1-2 7m15-6v7m13-8 2 7m10-12 4 6" stroke="#c6aa78" stroke-width="2"/>
+<path d="M51 59h21M61 49v20m107 130h21m-10-10v20" stroke="#d1b680" stroke-width="2"/>
+<path d="M120 25 Q121 29 125 30 Q121 31 120 35 Q119 31 115 30 Q119 29 120 25Z" fill="#f4dfa3"/><path d="M120 213 Q121 217 125 218 Q121 219 120 223 Q119 219 115 218 Q119 217 120 213Z" fill="#f4dfa3"/></svg>

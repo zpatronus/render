@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 248" fill="none" stroke-linecap="round" stroke-linejoin="round" role="img" aria-labelledby="title desc"><title id="title">猫头鹰</title><desc id="desc">暖金色双眼与羽毛面盘、靛蓝翅膀，停在月桂枝上的猫头鹰。</desc><defs><linearGradient id="owl-g" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#b6c7c5"/><stop offset="1" stop-color="#4c6979"/></linearGradient><linearGradient id="owl-h" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#f6ddaa"/><stop offset="1" stop-color="#c09966"/></linearGradient><linearGradient id="owl-k" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#788b9f"/><stop offset="1" stop-color="#35475e"/></linearGradient></defs>
+<circle cx="120" cy="110" r="87" fill="#e8d4a4" opacity=".06"/><path d="M46 217q74-21 152-2" stroke="#98744f" stroke-width="7"/><path d="m174 217 20-13m-9 7 18 1m-149 5-17-10" stroke="#c4a273" stroke-width="3"/>
+<path d="M65 72 53 29 96 47q25-7 50 0l43-18-12 46 8 61q0 67-65 77-64-11-65-77Z" fill="url(#owl-g)" stroke="#293b47" stroke-width="5"/>
+<path d="M69 47 81 77m91-30-13 30" stroke="#e0c58e" stroke-width="3"/>
+<path d="M73 111C42 126 37 174 68 193l23-52m76-30c31 15 36 63 5 82l-23-52" fill="url(#owl-k)" stroke="#30434f" stroke-width="4"/>
+<path d="m55 145 12 15m-13 3 13 13m118-31-12 15m13 3-13 13" stroke="#9cb5bd" stroke-width="3"/>
+<path d="M120 81C95 52 60 73 65 104 70 132 98 143 120 127c22 16 50 5 55-23 5-31-30-52-55-23Z" fill="url(#owl-h)" stroke="#6c5a49" stroke-width="3"/>
+<ellipse cx="91" cy="101" rx="18" ry="22" fill="#fcebbf"/><ellipse cx="149" cy="101" rx="18" ry="22" fill="#fcebbf"/>
+<ellipse cx="95" cy="101" rx="10" ry="15" fill="#283c49"/><ellipse cx="145" cy="101" rx="10" ry="15" fill="#283c49"/><circle cx="98" cy="96" r="4" fill="#fff7dc"/><circle cx="148" cy="96" r="4" fill="#fff7dc"/>
+<path d="m112 119 8 17 8-17" fill="#c88445" stroke="#77513e" stroke-width="2"/>
+<path d="m90 149 7 7 7-7m11 10 6 7 7-7m9-10 7 7 7-7m-48 24 7 7 7-7m10 10 6 7 7-7m-36 7 7 7 7-7" stroke="#d3d6bd" stroke-width="3"/>
+<path d="m100 207-5 13m13-11-1 11m28-13 5 13m-13-11 1 11" stroke="#e5bb75" stroke-width="5"/>
+<path d="M31 88 Q32 93 37 94 Q32 95 31 100 Q30 95 25 94 Q30 93 31 88Z" fill="#f4dfa3"/><path d="M207 53 Q208 60 215 61 Q208 62 207 69 Q206 62 199 61 Q206 60 207 53Z" fill="#f4dfa3"/></svg>

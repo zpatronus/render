@@ -1,0 +1,6 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {seats,sortedHand} from './layout.mjs';
+test('each viewer stays at bottom, right neighbor goes next, and every seat is unique',()=>{for(let n=2;n<=6;n++){const p=Array.from({length:n},(_,i)=>({id:String(i)}));for(const self of p){const s=seats(p,self.id);assert.equal(s[0].player.id,self.id);assert.equal(s[0].side,'self');assert.equal(s[1].side,n===2?'opposite':'right');assert.equal(s[1].player.id,String((Number(self.id)+1)%n));assert.equal(new Set(s.map(x=>x.row+':'+x.column)).size,n);assert.ok(s.every(x=>x.x>=0&&x.x<=100&&x.y>=0&&x.y<=100))}}});
+
+test('even counts place the opposite player alone at the top, balanced on both sides',()=>{for(const n of [2,4,6]){const p=Array.from({length:n},(_,i)=>({id:String(i)}));for(const self of p){const s=seats(p,self.id),top=s.find(x=>x.side==='opposite');assert.equal(top.offset,n/2);assert.equal(top.row,1);assert.equal(top.column,'1 / -1');assert.equal(s.filter(x=>x.side==='right').length,n/2-1);assert.equal(s.filter(x=>x.side==='left').length,n/2-1);assert.ok(s[0].row>top.row)}}});
+
+test('hands sort without mutating input or revealing unknown stones',()=>{const hand=[8,3,1,8,4];assert.deepEqual(sortedHand(hand),[1,3,4,8,8]);assert.deepEqual(hand,[8,3,1,8,4]);assert.deepEqual(sortedHand([0,0,0,0,0]),[0,0,0,0,0])});

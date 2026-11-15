@@ -1,6 +1,9 @@
 package secrethitler
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestBotsCanPlayWholeOfficialGamesWithoutHumans(t *testing.T) {
 	for n := 5; n <= 10; n++ {
@@ -63,4 +66,42 @@ func TestBotsUseOnlyTheirLegitimatePrivateInformation(t *testing.T) {
 	if move.Card != 1 {
 		t.Fatal("liberal did not deliberately select liberal policy")
 	}
+}
+
+func TestRoomBotsWaitAndPublishOnlyOneMoveAtATime(t *testing.T) {
+	g := fixture(t, 5)
+	for i := range g.Players {
+		g.Players[i].Bot = true
+	}
+	r := &room{Code: "ABC123", Game: g}
+	s := &server{rooms: map[string]*room{r.Code: r}, now: time.Now}
+	defer func() { s.mu.Lock(); delete(s.rooms, r.Code); s.mu.Unlock() }()
+	before := g.Step
+	s.mu.Lock()
+	s.advanceRoomBots(r)
+	if g.Step != before {
+		t.Fatal("scheduling executed a synchronous bot move")
+	}
+	s.mu.Unlock()
+	time.Sleep(100 * time.Millisecond)
+	s.mu.Lock()
+	early := g.Step
+	s.mu.Unlock()
+	if early != before {
+		t.Fatal("bot skipped thinking interval")
+	}
+	deadline := time.Now().Add(botActionDelay + time.Second)
+	for time.Now().Before(deadline) {
+		s.mu.Lock()
+		step, phase, votes := g.Step, g.Phase, len(g.Votes)
+		s.mu.Unlock()
+		if step != before {
+			if phase != voting || votes != 0 {
+				t.Fatal("bot ran several operations at once", phase, votes)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("delayed bot never acted")
 }

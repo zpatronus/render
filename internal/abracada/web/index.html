@@ -1,0 +1,84 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#191e1b"><meta name="description" content="出包魔法师：看不见自己的魔法石，却能看见所有人的。中文在线魔法推理桌游。"><title>出包魔法师 · Sidequests</title><link rel="icon" type="image/png" href="/favicon.png"><link rel="stylesheet" href="/abracada/style.css"></head><body>
+<header><nav aria-label="首页导航"><a href="/">Sidequests home</a><a href="/abracada/">出包魔法师首页</a></nav><button id="rules-open" class="quiet">玩法说明</button></header>
+<main><section id="entry"><div class="hero"><div><h1>出包<br><em>魔法师<span>。</span></em></h1></div><div class="hero-art" aria-hidden="true"><img class="hero-sigil" src="/abracada/art/sigil.svg" alt=""><div class="hero-stone one"><img src="/abracada/art/fire.svg" alt=""><span>7</span></div><div class="hero-stone two"><img src="/abracada/art/owl.svg" alt=""><span>4</span></div><div class="hero-stone three"><img src="/abracada/art/potion.svg" alt=""><span>8</span></div><span class="spark s1">✦</span><span class="spark s2">✧</span></div></div>
+<form id="entry-form"><div class="entry-fields"><div><label for="name">你的名字</label><input id="name" maxlength="20" autocomplete="nickname" required placeholder="昵称"></div><div><label for="code">房间码</label><input id="code" maxlength="6" autocomplete="off" placeholder="6 位房间码"></div></div><div class="entry-actions"><button type="submit" data-entry="create" class="primary">创建魔法桌 <span>↗</span></button><button type="submit" data-entry="join">加入房间 <span>→</span></button></div></form></section>
+<section id="room" hidden><div class="room-heading"><div><p id="room-code" class="eyebrow"></p><h1 id="phase-title"></h1></div><div class="room-actions"><button id="invite" class="quiet">复制邀请</button><button id="leave" class="quiet">离开</button></div></div>
+<section id="lobby"><div class="lobby-top"><div><h2>玩家</h2></div><span id="lobby-count" class="pill"></span></div><div id="lobby-seats" class="lobby-seats"></div><div class="lobby-controls"><label>机器人 <input id="bots" type="number" min="0" max="5" value="1"></label><button id="start" class="primary">开始施法 ↗</button></div><p id="mode-note" class="mode-note"></p></section>
+<section id="game" hidden><div class="game-meta"><span id="round-label"></span><span id="mode-label"></span><span id="connection" role="status">实时连接中</span></div><section id="score-strip" class="score-strip" aria-label="计分"></section><div class="play-layout">
+<div class="table-column"><div class="turn-banner"><div><span class="eyebrow">当前回合</span><h2 id="turn-label"></h2></div><span class="turn-direction">↺ 逆时针</span></div><div id="table" class="magic-table"><div class="table-center" aria-hidden="true"><img src="/abracada/art/sigil.svg" alt=""><span>ABRACADA<br><em>WHAT?</em></span></div><div id="seats" class="seats"></div></div><p id="neighbors" class="neighbors"></p>
+<section id="action-panel" class="action-panel"><div class="action-heading"><h2 id="action-title"></h2><button id="end-turn">收手，结束回合</button></div><p id="action-help"></p><div id="spell-buttons" class="spell-buttons"></div><div id="secret-choice" hidden><div id="secret-slots" class="secret-slots"></div></div></section>
+<section id="round-result" class="round-result" hidden><p class="eyebrow">本轮结算</p><h2 id="result-title"></h2><p id="result-reason"></p><div id="scoreboard" class="scoreboard"></div><button id="next-round" class="primary">下一轮 ↗</button><p id="next-wait" class="subtle"></p></section>
+</div><aside class="reference-column"><section class="public-board"><div class="section-heading"><div><h2>公开计数区</h2></div><span id="deck-count" class="pill"></span></div><div id="count-board" class="count-board"></div><div class="count-key"><span><i class="key-public"></i>公开</span><span><i class="key-visible"></i>可见</span><span><i class="key-tablet"></i>石板</span><span><i class="key-unknown"></i>未知</span></div></section><section class="tablet-panel"><div><h2>秘法石板</h2><p id="secret-count"></p></div><button id="tablets-open">查看我的石板</button><p class="subtle">只有持有者能看；本轮存活时，每个额外 +1 分。</p></section><details class="history" open><summary>施法记录</summary><ul id="history"></ul></details></aside></div></section></section>
+<p id="message" role="alert" hidden></p></main>
+<footer><span>出包魔法师</span><a href="https://gameurlife.pixnet.net/blog/posts/10335625152" target="_blank" rel="noopener noreferrer">规则参考 ↗</a></footer>
+<dialog id="confirm-dialog" class="app-dialog"><div class="dialog-heading"><h2 id="confirm-title"></h2><button id="confirm-close" class="quiet" aria-label="关闭">×</button></div><div id="confirm-body"></div><div class="dialog-actions"><button id="confirm-cancel">再想想</button><button id="confirm-accept" class="primary">确认施法</button></div></dialog>
+<dialog id="tablets-dialog" class="app-dialog"><div class="dialog-heading"><h2>我的秘法石板</h2><button id="tablets-close" class="quiet" aria-label="关闭">×</button></div><div id="my-tablets" class="my-tablets"></div></dialog>
+<dialog id="rules-dialog" class="app-dialog rules" aria-labelledby="rules-title">
+  <div class="dialog-heading"><h2 id="rules-title">出包魔法师 · 玩法</h2><button id="rules-close" class="quiet" aria-label="关闭">×</button></div>
+  <p>你看不到自己的手牌，却能看清其他人的魔法石。观察桌上的信息，猜自己能施放什么法术：猜对就能发动效果，猜错则会受到反噬。游戏分多轮进行，率先累计到 <strong>8 分</strong>的玩家获胜。</p>
+
+  <h3>开局准备</h3>
+  <p>每轮开始时，所有魔法石重新洗匀。每人获得 <strong>5 个魔法石、6 点生命</strong>，另有 4 个魔法石面朝下留在中央，称为「秘法石板」。剩下的组成抽牌堆。</p>
+  <p>自己的手牌始终只显示背面；其他玩家的手牌则按编号从小到大排列。两人游戏会在开局时公开移除 12 个魔法石，三人游戏移除 6 个。这些魔法石本轮不再使用，但会计入公开计数区。</p>
+  <p>开局时随机决定座次和首位施法者，之后座次不变。大家按<strong>逆时针</strong>顺序行动，也就是轮到你之后，接着由你的右邻行动。你的座位始终显示在底部；人数为偶数时，对面的玩家位于正上方。</p>
+
+  <h3>轮到你时</h3>
+  <p>一次轮到你行动，叫作一个「回合」；从发牌到结算，则是一「轮」。每个回合都必须先尝试施放一个法术，不能直接跳过。</p>
+  <ol>
+    <li><strong>选择法术。</strong>点击你想施放的法术并确认。你是在猜自己手中有没有对应的魔法石，不需要指定哪一块手牌。</li>
+    <li><strong>猜对了：</strong>系统从你的手牌中移走一个对应魔法石，放进公开计数区，然后执行法术效果。即使手中有多个相同的魔法石，一次也只消耗一个。</li>
+    <li><strong>继续，还是收手？</strong>成功施法后，你可以继续猜，也可以点「收手，结束回合」。连续施法时，下一个法术的编号必须<strong>大于或等于</strong>刚才的编号。例如刚施放了 6 号，接下来只能选 6 号或更大的编号。</li>
+    <li><strong>猜错了：</strong>失去 1 点生命，回合立即结束。只有远古巨龙例外：召唤失败时要掷骰，失去骰子点数的生命。</li>
+  </ol>
+  <p>回合结束时，从抽牌堆把手牌补到 5 个，再轮到右邻。抽牌堆不够就尽量补，抽完后不再补牌；用过的魔法石和秘法石板都不能拿来补牌。</p>
+  <p>生命最多为 6 点。需要掷骰时，系统会等概率掷出 <strong>1、2 或 3</strong>。</p>
+
+  <h3>八种法术</h3>
+  <p>每种法术的<strong>编号，就是这类魔法石的总数量</strong>。下表中的编号分别对应标准玩法和六人扩展；两种模式的法术效果相同。</p>
+  <div class="spell-rule"><div><h4>远古巨龙</h4><span>标准 1 号 · 六人 1 号</span></div><p>掷骰，其他所有玩家各失去骰子点数的生命。召唤失败时，改由你自己失去这么多生命。</p></div>
+  <div class="spell-rule"><div><h4>黑暗幽灵</h4><span>标准 2 号 · 六人 3 号</span></div><p>其他所有玩家各失去 1 点生命，你恢复 1 点生命。</p></div>
+  <div class="spell-rule"><div><h4>甜蜜的梦</h4><span>标准 3 号 · 六人 4 号</span></div><p>掷骰，你恢复骰子点数的生命。</p></div>
+  <div class="spell-rule"><div><h4>猫头鹰</h4><span>标准 4 号 · 六人 5 号</span></div><p>从中央尚未被取走的秘法石板中选一个，私下查看并收下。中央已经没有石板时，不再获得石板。</p></div>
+  <div class="spell-rule"><div><h4>闪电风暴</h4><span>标准 5 号 · 六人 6 号</span></div><p>你的左邻和右邻各失去 1 点生命。两人游戏中，左右邻是同一人，因此对手只失去 1 点生命。</p></div>
+  <div class="spell-rule"><div><h4>冰晶术</h4><span>标准 6 号 · 六人 7 号</span></div><p>你的左邻失去 1 点生命。</p></div>
+  <div class="spell-rule"><div><h4>火球术</h4><span>标准 7 号 · 六人 8 号</span></div><p>你的右邻失去 1 点生命。</p></div>
+  <div class="spell-rule"><div><h4>治疗药水</h4><span>标准 8 号 · 六人 11 号</span></div><p>你恢复 1 点生命。</p></div>
+
+  <h3>怎么利用计数区推理？</h3>
+  <p>每行的格子数，就是该法术的总数量。你可以直接在这里查看已知信息，不必来回数对手的手牌：</p>
+  <ul>
+    <li><strong>实心格：</strong>已经公开的魔法石，包括开局移除的和成功施放的。</li>
+    <li><strong>虚线格：</strong>目前在其他玩家手中、你能看见的魔法石。</li>
+    <li><strong>斜纹格：</strong>你自己持有、已经知道内容的秘法石板。这些标记只有你能看到。</li>
+    <li><strong>空格：</strong>你还不知道在哪里的魔法石，可能在自己的手中、抽牌堆或其他未向你公开的位置。</li>
+  </ul>
+  <p>例如标准玩法中，火球术一共有 7 个。如果 7 个格子都已经被已知信息占满，就说明你手里不可能还有火球术。</p>
+
+  <h3>秘法石板有什么用？</h3>
+  <p>秘法石板<strong>不是手牌，不能施法，也不能补进手牌</strong>。只有收下它的玩家知道内容，之后可以随时点击「查看我的石板」再次查看。</p>
+  <p>每轮结算时，只要你还活着，每持有一个秘法石板就额外获得 1 分；已经出局则没有这项加分。</p>
+
+  <h3>什么时候结束一轮？怎么计分？</h3>
+  <p>只要有人生命归零，或有人成功施放完自己所有的魔法石，本轮就立即结束，不会继续等其他人行动。</p>
+  <div class="rules-table-wrap"><table><thead><tr><th>结束原因</th><th>本轮得分</th></tr></thead><tbody>
+    <tr><td>用完全部手牌</td><td>该玩家获得 3 分；其余玩家视为本轮出局，不得分。</td></tr>
+    <tr><td>施法击败其他玩家</td><td>施法者获得 3 分，其他存活者各获得 1 分，出局者不得分。一次击败多人也只获得 3 分。</td></tr>
+    <tr><td>施法失败，自己生命归零</td><td>自己不得分，其他存活者各获得 1 分。</td></tr>
+  </tbody></table></div>
+  <p>按上述方式计分后，存活者再加上自己的秘法石板分数。</p>
+
+  <h3>下一轮与最终获胜</h3>
+  <p>如果还没有人达到 8 分，就收回所有魔法石和秘法石板，重新洗牌、发牌，所有人的生命恢复为 6 点，累计分数保留。</p>
+  <p>从第 2 轮起，由<strong>上一轮结束者本人先手</strong>：谁因反噬出局、谁施法击败了别人，或谁用完了手牌，下一轮就由谁先行动。座次不变，仍按逆时针顺序进行。</p>
+  <p>一轮结算后，只要有人累计达到或超过 8 分，游戏就结束。如果多人同时达到，先比较<strong>这一轮获得的分数</strong>，较高者胜；仍然相同，再比较本轮结束时的剩余生命；还是相同，就共同获胜。</p>
+
+  <h3>六人扩展</h3>
+  <p>2–5 人使用标准配置：编号为 1–8，共 36 个魔法石。六人使用本站的自定义扩展配置：八种法术依次为 <strong>1、3、4、5、6、7、8、11</strong> 号，共 45 个魔法石。编号仍等于数量，只是跳过了 2、9、10 号。</p>
+  <p>六人各发 5 个，中央留出 4 个秘法石板后，抽牌堆还剩 11 个。法术效果和连续施法的大小顺序不变。</p>
+  <p class="subtle">原作 Abracada...What?，由 Gary Kim 设计。本页面为独立编写的非官方版本，SVG 图案为本站原创。本站采用逆时针行动、随机首轮座次，以及由上一轮结束者先手的规则；六人配置为自定义扩展。</p>
+  <p><a href="https://www.rulespal.com/abracada-what/rulebook" target="_blank" rel="noopener noreferrer">英文规则参考 ↗</a> · <a href="https://gameurlife.pixnet.net/blog/posts/10335625152" target="_blank" rel="noopener noreferrer">中文规则参考 ↗</a></p>
+</dialog>
+<dialog id="owl-dialog" class="app-dialog"><div class="dialog-heading"><h2>秘法石板</h2><button id="owl-close" class="quiet" aria-label="关闭">×</button></div><div class="owl-heading"><img src="/abracada/art/owl.svg" alt="猫头鹰"></div><div id="owl-picks" class="owl-picks"></div><div id="owl-result" class="owl-result" hidden></div><button id="owl-done" class="owl-done primary" hidden>收下</button></dialog>
+<section id="cast-stage" class="cast-stage" aria-live="polite" aria-atomic="true" hidden><div class="cast-stage-panel"><p id="cast-stage-name"></p><h2 id="cast-stage-spell"></h2><div class="cast-stage-face"><div id="cast-stage-art"></div><strong id="cast-stage-number" class="spell-number"></strong></div><div id="cast-stage-result">?</div></div></section>
+<section id="emoji-menu" class="emoji-menu" aria-label="发送表情" hidden><div class="emoji-menu-heading"><h2>表情</h2><button id="emoji-close" class="quiet" aria-label="关闭表情菜单">×</button></div><div id="emoji-recent"></div><div id="emoji-groups"></div></section><div id="reactions" class="reactions" aria-hidden="true"></div>
+<div id="effects" class="effects" aria-hidden="true"></div><div id="cast-notice" class="cast-notice" aria-live="polite" hidden></div><script type="module" src="/abracada/app.js"></script></body></html>
