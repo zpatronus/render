@@ -125,8 +125,11 @@ function loadKnownTablets(){
 }
 
 function shakeHit(target){
- if(!target||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
- target.animate([{translate:'0px 0px',filter:'brightness(1)'},{translate:'-2px 0px',filter:'brightness(1.18)',offset:.25},{translate:'1.5px 0px',offset:.55},{translate:'-.5px 0px',offset:.8},{translate:'0px 0px',filter:'brightness(1)'}],{duration:400,easing:'ease-in-out'});
+ if(!target)return;
+ const flash=el('div',undefined,'damage-flash');target.append(flash);
+ const glow=flash.animate([{opacity:0},{opacity:1,offset:.2},{opacity:.65,offset:.5},{opacity:0}],{duration:400,easing:'ease-out'});glow.onfinish=()=>flash.remove();
+ if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+ target.animate([{translate:'0px 0px'},{translate:'-2px 0px',offset:.25},{translate:'1.5px 0px',offset:.55},{translate:'-.5px 0px',offset:.8},{translate:'0px 0px'}],{duration:400,easing:'ease-in-out'});
 }
 
 let emojiCatalog=null,emojiLoading=null,recentEmoji=[];
