@@ -69,13 +69,16 @@ type privateNotes struct {
 	PeekElection   int
 }
 type event struct {
-	ID       int    `json:"id"`
-	Kind     string `json:"kind,omitempty"`
-	Policy   policy `json:"policy,omitempty"`
-	Target   string `json:"target,omitempty"`
-	Winner   role   `json:"winner,omitempty"`
-	Election int    `json:"election"`
-	Text     string `json:"text"`
+	Votes      []ballot `json:"votes,omitempty"`
+	President  string   `json:"president,omitempty"`
+	Chancellor string   `json:"chancellor,omitempty"`
+	ID         int      `json:"id"`
+	Kind       string   `json:"kind,omitempty"`
+	Policy     policy   `json:"policy,omitempty"`
+	Target     string   `json:"target,omitempty"`
+	Winner     role     `json:"winner,omitempty"`
+	Election   int      `json:"election"`
+	Text       string   `json:"text"`
 }
 type game struct {
 	ID                                        string
@@ -155,9 +158,6 @@ func newGame(members []member) (*game, error) {
 func (g *game) log(text string) {
 	g.EventSequence++
 	g.Events = append(g.Events, event{ID: g.EventSequence, Election: g.Election, Text: text})
-	if len(g.Events) > 120 {
-		g.Events = append([]event(nil), g.Events[len(g.Events)-120:]...)
-	}
 }
 func (g *game) index(id string) int {
 	for i, p := range g.Players {
@@ -347,14 +347,22 @@ func (g *game) act(actorID, action, targetID string, card int, yes bool) error {
 		g.LastVotePresident = g.Players[g.President].ID
 		g.LastVoteChancellor = g.Players[g.Nominee].ID
 		g.LastVotePassed = approvals > g.aliveCount()/2
+		result := "未通过"
+		if g.LastVotePassed {
+			result = "通过"
+		}
+		g.log("政府选举" + result)
+		e := &g.Events[len(g.Events)-1]
+		e.Kind = "vote"
+		e.Votes = append([]ballot(nil), g.LastVotes...)
+		e.President = g.LastVotePresident
+		e.Chancellor = g.LastVoteChancellor
 		if !g.LastVotePassed {
-			g.log("政府选举未通过")
 			g.failedGovernment()
 			return nil
 		}
 		g.LastPresident = g.President
 		g.LastChancellor = g.Nominee
-		g.log("政府选举通过")
 		if g.FascistPolicies >= 3 && g.Players[g.Nominee].Role == hitler {
 			g.end(fascist, "3 项法西斯政策后，希特勒当选总理")
 			return nil

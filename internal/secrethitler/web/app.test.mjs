@@ -90,3 +90,21 @@ test('important public events queue once and never reveal executed roles',async(
  assert.equal($('notice-title').textContent,'玩家2 被处决');assert.match($('notice-body').querySelector('img').src,/avatar-3/);assert.equal($('notice-body').querySelector('.result-role'),null);
  $('notice-done').onclick();await h.flush();await h.poll();assert.equal($('notice-dialog').open,false,'polling must not replay a consumed event');
 });
+
+test('both trackers reset together, remaining counts follow policies, and history keeps named ballots',async()=>{
+ const h=await harness(),{$,state}=h;
+ assert.equal($('remaining-liberal').textContent,'自由派 6 张');
+ assert.equal($('remaining-fascist').textContent,'法西斯 11 张');
+ const start=[$('election-marker').style.left,$('status-marker').style.left];
+ state.game.tracker=2;state.game.liberalPolicies=2;state.game.fascistPolicies=3;
+ state.game.events=[{id:1,kind:'vote',election:1,text:'政府选举未通过',president:'p1',chancellor:'p0',votes:[{id:'p0',yes:true},{id:'p1',yes:false}]}];
+ await h.poll();
+ assert.equal($('tracker').textContent,'流局计数 2 / 3');
+ assert.notEqual($('election-marker').style.left,start[0]);assert.notEqual($('status-marker').style.left,start[1]);
+ assert.equal($('remaining-liberal').textContent,'自由派 4 张');assert.equal($('remaining-fascist').textContent,'法西斯 8 张');
+ const votes=$('history').children[0].querySelector('.history-votes');
+ assert.equal(votes.children[0].textContent,'玩家0：Ja!');assert.equal(votes.children[1].textContent,'玩家1：Nein!');
+ state.game.tracker=0;state.game.lastVotes=[{id:'p0',yes:false}];await h.poll();
+ assert.equal($('election-marker').style.left,start[0]);assert.equal($('status-marker').style.left,start[1]);
+ assert.equal($('history').children[0].querySelector('.history-votes').children[0].textContent,'玩家0：Ja!');
+});

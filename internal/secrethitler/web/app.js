@@ -111,16 +111,19 @@ function roleArt(role,avatar){return role==='hitler'?'role-hitler.png':'role-'+r
 function renderGame(){
  const g=room.game;renderTrack('liberal',5,g.liberalPolicies);renderTrack('fascist',6,g.fascistPolicies);
  const count=room.members.length;$('fascist-board-art').src=base+'art/board-fascist-'+(count<=6?'5-6':count<=8?'7-8':'9-10')+'.png';
- $('election-marker').style.left=[35.8,44.8,54][g.tracker]+'%';
+ $('election-marker').style.left=[35.8,44.95,54.1,63.25][g.tracker]+'%';
+ $('status-marker').style.left=[21.4,40.4,59.4,78.5][g.tracker]+'%';
+ $('remaining-liberal').textContent='自由派 '+(6-g.liberalPolicies)+' 张';
+ $('remaining-fascist').textContent='法西斯 '+(11-g.fascistPolicies)+' 张';
  $('power-legend').replaceChildren(...g.track.map((p,i)=>el('span',(i+1)+' · '+(i===5?'获胜':powerNames[p]||'—')+(i===4?' / 否决':''))));
  $('liberal-count').textContent=g.liberalPolicies+' / 5';$('fascist-count').textContent=g.fascistPolicies+' / 6';
- $('tracker').textContent='选举计数 '+g.tracker+' / 3';$('deck-count').textContent='牌堆 '+g.deckCount;$('discard-count').textContent='弃牌 '+g.discardCount;
+ $('tracker').textContent='流局计数 '+g.tracker+' / 3';$('deck-count').textContent='牌堆 '+g.deckCount;$('discard-count').textContent='弃牌 '+g.discardCount;
  renderSeats($('game-players'),room.members);
  const government=$('government');government.replaceChildren();government.append(el('div','总统：'+name(g.president)),el('div','总理：'+name(g.nominee)));
  renderControls();
  $('ballots').hidden=!g.lastVotes?.length;
  if(g.lastVotes?.length&&$('ballot-list').dataset.key!==g.lastVotePresident+g.lastVoteChancellor+JSON.stringify(g.lastVotes)){ $('ballot-list').dataset.key=g.lastVotePresident+g.lastVoteChancellor+JSON.stringify(g.lastVotes);$('ballot-title').textContent=name(g.lastVotePresident)+' ＋ '+name(g.lastVoteChancellor)+' · '+(g.lastVotePassed?'通过':'未通过');$('ballot-list').replaceChildren(...g.lastVotes.map(v=>{const b=el('span',name(v.id),'ballot '+(v.yes?'yes':'no'));b.style.setProperty('--i',String(g.lastVotes.indexOf(v)));b.append(image(v.yes?'vote-yes.png':'vote-no.png',v.yes?'Ja!':'Nein!','ballot-result-art'));return b;}));}
- $('history').replaceChildren(...g.events.map(e=>el('li','第 '+e.election+' 届 · '+e.text)));
+ $('history').replaceChildren(...g.events.map(e=>{const item=el('li','第 '+e.election+' 届 · '+e.text);if(e.votes?.length){item.append(el('div','总统：'+name(e.president)+' · 总理：'+name(e.chancellor)));const votes=el('div',undefined,'history-votes');for(const v of e.votes)votes.append(el('span',name(v.id)+'：'+(v.yes?'Ja!':'Nein!'),v.yes?'role-liberal':'role-fascist'));item.append(votes);}return item;}));
  $('identity-toggle').hidden=g.phase==='finished';
  if(g.phase==='finished')renderResults(g);
 }

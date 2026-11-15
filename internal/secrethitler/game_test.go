@@ -396,3 +396,45 @@ func TestImportantEventsAreStructuredOrderedAndKeepExecutionPrivate(t *testing.T
 		t.Fatal("missing victory event", last)
 	}
 }
+
+func TestVoteHistoryRetainsCompletedBallotsAndHidesPartialVotes(t *testing.T) {
+	g := fixture(t, 5)
+	perform(t, g, 0, "nominate", 2, 0, false)
+	perform(t, g, 0, "vote", -1, 0, true)
+	for _, e := range g.publicView("p1").Events {
+		if len(e.Votes) != 0 {
+			t.Fatal("unfinished election leaked ballots")
+		}
+	}
+	for i := 1; i < 5; i++ {
+		perform(t, g, i, "vote", -1, 0, false)
+	}
+	var first event
+	for _, e := range g.publicView("p1").Events {
+		if e.Kind == "vote" {
+			first = e
+		}
+	}
+	if len(first.Votes) != 5 || !first.Votes[0].Yes || first.Votes[1].Yes || first.President != "p0" || first.Chancellor != "p2" {
+		t.Fatalf("missing complete election record: %+v", first)
+	}
+	perform(t, g, 1, "nominate", 3, 0, false)
+	for i := 0; i < 5; i++ {
+		perform(t, g, i, "vote", -1, 0, false)
+	}
+	for i := 0; i < 125; i++ {
+		g.log("later event")
+	}
+	count := 0
+	for _, e := range g.publicView("p1").Events {
+		if e.Kind == "vote" {
+			count++
+			if e.Election == first.Election && !e.Votes[0].Yes {
+				t.Fatal("earlier ballots overwritten")
+			}
+		}
+	}
+	if count != 2 {
+		t.Fatalf("full history lost elections: %d", count)
+	}
+}
