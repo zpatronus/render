@@ -1,7 +1,10 @@
 // Secret Hitler Chinese adaptation. Licensed under CC BY-NC-SA 4.0; see LICENSE.
 package secrethitler
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 func (r *room) botCount() int {
 	minimum := max(0, 5-len(r.Members))
@@ -138,7 +141,7 @@ func botDecision(public *gameView, private privateView) (botMove, bool) {
 	return move, true
 }
 func advanceBots(g *game) {
-	// Bounded work per request. Further polling continues an all-bot endgame.
+	// Bound each batch; the room worker continues if bots still have actions.
 	for actions := 0; actions < 160 && g.Phase != finished; actions++ {
 		moved := false
 		for _, p := range g.Players {
@@ -159,4 +162,39 @@ func advanceBots(g *game) {
 			return
 		}
 	}
+}
+
+// Continue bot-only phases independently of browsers and HTTP requests.
+// Called with the server mutex held.
+func (s *server) advanceRoomBots(r *room) {
+	advanceBots(r.Game)
+	if r.botsRunning || !botsPending(r.Game) {
+		return
+	}
+	r.botsRunning = true
+	go func() {
+		for {
+			time.Sleep(10 * time.Millisecond)
+			s.mu.Lock()
+			if s.rooms[r.Code] != r || r.Game == nil || !botsPending(r.Game) {
+				r.botsRunning = false
+				s.mu.Unlock()
+				return
+			}
+			advanceBots(r.Game)
+			r.notify()
+			s.mu.Unlock()
+		}
+	}()
+}
+func botsPending(g *game) bool {
+	if g.Phase == finished {
+		return false
+	}
+	for _, p := range g.Players {
+		if p.Bot && p.Alive && len(g.publicView(p.ID).Actions) > 0 {
+			return true
+		}
+	}
+	return false
 }

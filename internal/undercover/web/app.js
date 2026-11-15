@@ -11,7 +11,7 @@ function code(){return location.hash.slice(1).toUpperCase();}
 function render(next){
  if(!room||room.round!==next.round||room.dealt!==next.dealt||room.code!==next.code)hideWord();
  const configChanged=!room||room.code!==next.code||room.dealt!==next.dealt||room.host!==next.host;
- room=next;$('lobby').hidden=true;$('room').hidden=false;
+ room=next;connectStream();$('lobby').hidden=true;$('room').hidden=false;
  $('room-code').textContent=room.code;$('round').textContent=room.dealt?'第 '+room.round+' 局 · 已发词':'等待玩家';
  $('player-count').textContent=room.players.length;
  $('players').replaceChildren(...room.players.map(p=>{
@@ -27,7 +27,7 @@ $('room-spies').oninput=civilianCount;$('room-blanks').oninput=civilianCount;
 async function action(task){
  if(busy)return;busy=true;revision++;message('');
  document.querySelectorAll('button').forEach(b=>b.disabled=true);
- try{await task();}catch(e){message(e.message);}finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false);}
+ try{await task();}catch(e){message(e.message);}finally{busy=false;connectStream(true);document.querySelectorAll('button').forEach(b=>b.disabled=false);}
 }
 function enter(next){location.hash=next.code;render(next);}
 $('create').onsubmit=e=>{e.preventDefault();action(async()=>enter(await api('create',{name:$('host-name').value})));};
@@ -55,11 +55,25 @@ $('reset').onclick=()=>{
  const request={code:room.code,round:room.round};
  askConfirmation('结束本局，开启下一局？',async()=>render(await api('reset',request)));
 };
-$('leave').onclick=()=>action(async()=>{await api('leave',{code:room.code});room=null;hideWord();location.hash='';$('room').hidden=true;$('lobby').hidden=false;});
+$('leave').onclick=()=>action(async()=>{await api('leave',{code:room.code});stopStream();room=null;hideWord();location.hash='';$('room').hidden=true;$('lobby').hidden=false;});
 $('share').onclick=()=>action(async()=>{
  const link=location.origin+'/undercover/#'+room.code;
  try{await navigator.clipboard.writeText(link);$('share').textContent='已复制';setTimeout(()=>$('share').textContent='复制邀请',2000);}catch{message(link);}
 });
+
+let roomStream=null,streamCode='';
+function stopStream(){if(roomStream){roomStream.close();roomStream=null;}streamCode='';}
+function connectStream(force=false){
+ const current=code();
+ if(document.hidden||!/^[A-F0-9]{6}$/.test(current)||typeof EventSource==='undefined'){stopStream();return;}
+ if(!force&&roomStream&&streamCode===current)return;
+ stopStream();streamCode=current;
+ const source=new EventSource('/undercover/api/events?code='+current);roomStream=source;
+ source.onmessage=event=>{if(roomStream!==source||code()!==current||busy)return;try{const next=JSON.parse(event.data);revision++;render(next);message('');}catch{message('实时更新失败，请重新连接');}};
+ source.addEventListener('expired',()=>{if(roomStream!==source)return;stopStream();room=null;hideWord();$('room').hidden=true;$('lobby').hidden=false;$('code').value=current;message('房间已关闭或你已离开房间');});
+ source.onerror=()=>{if(roomStream!==source)return;message('连接中断，正在重新连接…');if(source.readyState===EventSource.CLOSED){stopStream();sync();}};
+}
+
 async function sync(){
  if(busy||loading||document.hidden)return;
  const current=code();if(!/^[A-F0-9]{6}$/.test(current))return;
@@ -68,8 +82,10 @@ async function sync(){
  catch(e){if(!room){$('code').value=current;message(e.message);}else{hideWord();message(e.message);}}
  finally{loading=false;}
 }
-window.addEventListener('hashchange',()=>{if(room&&room.code!==code()){room=null;hideWord();$('room').hidden=true;$('lobby').hidden=false;}sync();});
-document.addEventListener('visibilitychange',()=>{hideWord();if(!document.hidden)sync();});
-window.addEventListener('pagehide',hideWord);
+window.addEventListener('hashchange',()=>{stopStream();if(room&&room.code!==code()){room=null;hideWord();$('room').hidden=true;$('lobby').hidden=false;}sync();});
+document.addEventListener('visibilitychange',()=>{hideWord();if(!document.hidden){sync();connectStream(true);}else stopStream();});
+window.addEventListener('pagehide',()=>{hideWord();stopStream();});
 api('info').then(info=>$('bank-count').textContent=info.pairs.toLocaleString('zh-CN')+' 组词对').catch(()=>{});
-$('code').value=code();sync();setInterval(sync,2500);
+$('code').value=code();sync();
+
+window.addEventListener('pageshow',()=>connectStream());

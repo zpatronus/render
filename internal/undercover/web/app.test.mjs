@@ -4,14 +4,14 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 
 test('cards start covered, toggle without re-fetching to hide, and cover on round changes or switching away',async()=>{
- const elements=new Map(),events=new Map(),requests=[];let poll;
+ const elements=new Map(),events=new Map(),requests=[];let source;
  const element=id=>{
   if(!elements.has(id))elements.set(id,{hidden:id==='secret',textContent:'',value:'',attributes:{},setAttribute(k,v){this.attributes[k]=v;},showModal(){this.open=true;},close(){this.open=false;},append(){},replaceChildren(){}});
   return elements.get(id);
  };
  const state={code:'ABC123',round:1,dealt:true,host:true,spies:1,blanks:0,players:[{name:'房主',host:true,you:true}]};
  const document={hidden:false,getElementById:element,createElement:()=>({append(){}}),querySelectorAll:()=>[],addEventListener:(name,fn)=>events.set(name,fn)};
- const context={document,location:{hash:'#ABC123',origin:'http://example.test'},window:{addEventListener:(name,fn)=>events.set(name,fn)},navigator:{},confirm:()=>{throw Error('native browser dialogs are forbidden');},setTimeout:()=>{},setInterval:fn=>{poll=fn;},fetch:async(url,options)=>{
+ const context={EventSource:class {constructor(){source=this;} close(){this.closed=true;} addEventListener(name,fn){this[name]=fn;}},document,location:{hash:'#ABC123',origin:'http://example.test'},window:{addEventListener:(name,fn)=>events.set(name,fn)},navigator:{},confirm:()=>{throw Error('native browser dialogs are forbidden');},setTimeout:()=>{},setInterval:()=>{throw Error('room polling is forbidden');},fetch:async(url,options)=>{
   requests.push({url,options});
   const data=url.endsWith('/info')?{pairs:1000}:url.endsWith('/word')?{word:'苹果',blank:false,round:state.round}:structuredClone(state);
   return {ok:true,json:async()=>data};
@@ -32,7 +32,7 @@ test('cards start covered, toggle without re-fetching to hide, and cover on roun
  assert.equal(requests.length,before,'hiding must work locally');
  await element('reveal').onclick();
  state.round++;
- await poll();
+ source.onmessage({data:JSON.stringify(state)});
  assert.equal(element('secret').hidden,true,'a new round must not display the previous card');
  await element('reveal').onclick();
  document.hidden=true;events.get('visibilitychange')();

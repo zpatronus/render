@@ -23,6 +23,7 @@ const roomIdleTTL = 15 * time.Minute
 type pair struct{ a, b string }
 type player struct{ id, name, word string }
 type room struct {
+	listeners            map[chan struct{}]struct{}
 	code, host           string
 	players              []player
 	spies, blanks, round int
@@ -91,6 +92,10 @@ func (s *server) handler() http.Handler {
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'")
 		if strings.HasPrefix(r.URL.Path, "/api/") {
+			if r.URL.Path == "/api/events" {
+				s.events(w, r)
+				return
+			}
 			s.api(w, r)
 			return
 		}
@@ -170,6 +175,7 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 	for code, r := range s.rooms {
 		if now.Sub(r.active) >= roomIdleTTL {
 			delete(s.rooms, code)
+			r.notify()
 		}
 	}
 	if q.URL.Path == "/api/info" && q.Method == "GET" {
@@ -221,6 +227,9 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 	}
 	// Every request addressed to an existing room counts as activity.
 	r.active = now
+	if q.Method == "POST" || q.URL.Path == "/api/room" {
+		defer r.notify()
+	}
 	id := ""
 	if c, err := q.Cookie("undercover_" + in.Code); err == nil {
 		id = c.Value

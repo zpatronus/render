@@ -24,12 +24,14 @@ const roomIdleTTL = 15 * time.Minute
 const imageCacheTTL = 24 * time.Hour
 
 type room struct {
-	Code, Host string
-	Members    []member
-	Tokens     map[string]string
-	Bots       int
-	Game       *game
-	Active     time.Time
+	botsRunning bool
+	listeners   map[chan struct{}]struct{}
+	Code, Host  string
+	Members     []member
+	Tokens      map[string]string
+	Bots        int
+	Game        *game
+	Active      time.Time
 }
 type server struct {
 	mu    sync.Mutex
@@ -68,6 +70,10 @@ func (s *server) handler() http.Handler {
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 		if strings.HasPrefix(r.URL.Path, "/api/") {
+			if r.URL.Path == "/api/events" {
+				s.events(w, r)
+				return
+			}
 			s.api(w, r)
 			return
 		}
@@ -165,6 +171,7 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 	for code, r := range s.rooms {
 		if now.Sub(r.Active) >= roomIdleTTL {
 			delete(s.rooms, code)
+			r.notify()
 		}
 	}
 	if q.URL.Path == "/api/create" && q.Method == "POST" {
@@ -193,6 +200,9 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 		return
 	}
 	r.Active = now
+	if q.Method == "POST" || q.URL.Path == "/api/room" {
+		defer r.notify()
+	}
 	id := ""
 	if c, err := q.Cookie("sh_" + r.Code); err == nil {
 		id = r.Tokens[c.Value]
@@ -240,7 +250,7 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 	}
 	if q.URL.Path == "/api/room" && q.Method == "GET" {
 		if r.Game != nil {
-			advanceBots(r.Game)
+			s.advanceRoomBots(r)
 		}
 		respond(w, 200, r.view(id))
 		return
@@ -366,7 +376,7 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 		}
 	}
 	if r.Game != nil {
-		advanceBots(r.Game)
+		s.advanceRoomBots(r)
 	}
 	respond(w, 200, r.view(id))
 }

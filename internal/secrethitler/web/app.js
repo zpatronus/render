@@ -30,10 +30,10 @@ async function api(endpoint,data){
  let result;try{result=await response.json();}catch{throw Error('服务器暂时不可用');}
  if(!response.ok){const error=Error(result.error||'请求失败');error.status=response.status;throw error;}return result;
 }
-async function run(task){if(busy)return;busy=true;revision++;notify();try{await task();}catch(error){notify(error.message);}finally{busy=false;}}
+async function run(task){if(busy)return;busy=true;revision++;notify();try{await task();}catch(error){notify(error.message);}finally{busy=false;connectStream(true);}}
 function roomCode(){return location.hash.slice(1).toUpperCase();}
 function enter(next){location.hash=next.code;render(next);}
-function entry(){noticeQueue=[];noticeGame='';lastEvent=0;activeNotice=null;$('notice-dialog').close();room=null;snapshot='';phaseKey='';hideIdentity();$('entry').hidden=false;$('room').hidden=true;}
+function entry(){stopStream();noticeQueue=[];noticeGame='';lastEvent=0;activeNotice=null;$('notice-dialog').close();room=null;snapshot='';phaseKey='';hideIdentity();$('entry').hidden=false;$('room').hidden=true;}
 function credentials(){return {code:room.code,game:room.game?.id,step:room.game?.step};}
 async function act(action,extra={},captured=credentials()){render(await api(action,{...captured,...extra}));}
 function chooseAvatar(n){avatar=n;$('avatar-preview').src=base+'art/avatar-'+n+'.svg';for(const b of $('avatars').children)b.setAttribute('aria-pressed',String(Number(b.dataset.avatar)===n));try{localStorage.setItem('sh-avatar',String(n));}catch{}}
@@ -48,7 +48,7 @@ $('entry-form').onsubmit=event=>{
 function render(next){
  const encoded=JSON.stringify(next);if(encoded===snapshot)return;
  const enteringGame=!!next.game&&room?.game?.id!==next.game.id;
- snapshot=encoded;room=next;
+ snapshot=encoded;room=next;connectStream();
  const key=next.code+':'+(next.game?next.game.id+':'+next.game.step:'lobby');
  if(key!==phaseKey){if(enteringGame||!next.game||next.game.phase==='finished')hideIdentity();if($('confirm-dialog').open)closeConfirm();phaseKey=key;}
  $('entry').hidden=true;$('room').hidden=false;$('room-code').textContent=next.code+(next.game?' · 第 '+next.game.election+' 届':'');
@@ -195,14 +195,30 @@ function pumpNotices(){
 $('notice-done').onclick=()=>{$('notice-dialog').close();};
 $('notice-dialog').onclose=()=>{activeNotice=null;queueMicrotask(pumpNotices);};
 
+
+let roomStream=null,streamCode='';
+function stopStream(){if(roomStream){roomStream.close();roomStream=null;}streamCode='';}
+function connectStream(force=false){
+ const current=roomCode();
+ if(document.hidden||!/^[A-F0-9]{6}$/.test(current)||typeof EventSource==='undefined'){stopStream();return;}
+ if(!force&&roomStream&&streamCode===current)return;
+ stopStream();streamCode=current;
+ const source=new EventSource('/secret-hitler/api/events?code='+current);roomStream=source;
+ source.onmessage=event=>{if(roomStream!==source||roomCode()!==current||busy)return;try{const next=JSON.parse(event.data);revision++;render(next);notify('');}catch{notify('实时更新失败，请重新连接');}};
+ source.addEventListener('expired',()=>{if(roomStream!==source)return;stopStream();entry();$('code').value=current;notify('房间已关闭或你已离开房间');});
+ source.onerror=()=>{if(roomStream!==source)return;notify('连接中断，正在重新连接…');if(source.readyState===EventSource.CLOSED){stopStream();sync();}};
+}
+
 async function sync(){
  if(busy||polling||document.hidden)return;const code=roomCode();if(!/^[A-F0-9]{6}$/.test(code))return;
  polling=true;const started=revision;
- try{const next=await api('room?code='+code);if(roomCode()===code&&!busy&&revision===started){render(next);notify();}}
+ try{const next=await api('room?code='+code);if(roomCode()===code&&!busy&&revision===started){render(next);connectStream();notify();}}
  catch(error){if(roomCode()!==code)return;if(error.status===403||error.status===404){entry();$('code').value=code;}notify(error.message);}
  finally{polling=false;}
 }
-window.addEventListener('hashchange',()=>{if(room?.code!==roomCode())entry();$('code').value=roomCode();sync();});
+window.addEventListener('hashchange',()=>{stopStream();if(room?.code!==roomCode())entry();$('code').value=roomCode();sync();});
 function coverSecrets(){hideIdentity();if($('confirm-dialog').open)closeConfirm();}
-document.addEventListener('visibilitychange',()=>{coverSecrets();if(!document.hidden){pumpNotices();sync();}});window.addEventListener('pagehide',coverSecrets);
-$('code').value=roomCode();sync();setInterval(sync,3000);
+document.addEventListener('visibilitychange',()=>{coverSecrets();if(!document.hidden){pumpNotices();sync();connectStream(true);}else stopStream();});window.addEventListener('pagehide',()=>{coverSecrets();stopStream();});
+$('code').value=roomCode();sync();
+
+window.addEventListener('pageshow',()=>connectStream());

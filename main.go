@@ -38,7 +38,7 @@ func handler() http.Handler {
 	files, _ := fs.Sub(web, "web")
 	static := http.FileServer(http.FS(files))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" && r.URL.Path != "/style.css" {
+		if r.URL.Path != "/" && r.URL.Path != "/style.css" && r.URL.Path != "/favicon.png" {
 			http.NotFound(w, r)
 			return
 		}
