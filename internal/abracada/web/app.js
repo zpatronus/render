@@ -60,11 +60,20 @@ function render(next){
      $('cast-stage-result').textContent=(event.success?'施法成功':'反噬')+'（投到 '+event.roll+' 点）';
     }
     await new Promise(resolve=>setTimeout(resolve,event.roll?1400:750));
-    if(!event.success)await new Promise(resolve=>setTimeout(resolve,500));
+    if(!event.success)await new Promise(resolve=>setTimeout(resolve,1000));
     if(epoch!==presentationEpoch)return;
    }
    if(!casts.length&&passes.length)await new Promise(resolve=>setTimeout(resolve,350));
-   $('cast-stage').hidden=true;renderNow(next);
+   $('cast-stage').hidden=true;
+   const backfire=casts.find(e=>!e.success);
+   if(backfire&&room?.game?.id===next.game.id){
+    const impact=structuredClone(next),before=room.game;
+    impact.game.turn=before.turn;impact.game.phase='playing';impact.game.deck=before.deck;impact.game.canEnd=false;
+    for(const player of impact.game.players){const previous=before.players.find(p=>p.id===player.id);if(previous)player.hand=[...previous.hand]}
+    renderNow(impact);
+    await new Promise(resolve=>setTimeout(resolve,450));if(epoch!==presentationEpoch)return;
+   }
+   renderNow(next);
    if(casts.length){$('cast-notice').hidden=true;if(['round-end','finished'].includes(game.phase)){$('round-result').hidden=true;await new Promise(resolve=>setTimeout(resolve,1320));if(epoch===presentationEpoch)$('round-result').hidden=false}}
   }finally{if(epoch===presentationEpoch){presentationActive=false;$('cast-stage').hidden=true}}
  }).catch(error=>{if(epoch===presentationEpoch){presentationActive=false;$('cast-stage').hidden=true;message(error.message)}});
