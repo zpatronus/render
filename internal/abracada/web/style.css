@@ -125,3 +125,7 @@ body,button,input,a{font-variant-emoji:text}a,button,.arrow,.asterisk{font-famil
 }
 
 .player-tablets{display:inline-block;margin-left:8px;font-size:11px;font-weight:400;color:var(--gold);vertical-align:middle}
+
+.cast-stage-panel:has(#cast-draw:not([hidden])){width:260px;max-width:calc(100vw - 32px);max-height:none;flex-shrink:0}
+#cast-draw-pad{height:150px}
+@media(min-width:1100px){.cast-stage-panel:has(#cast-draw:not([hidden])){width:320px}#cast-draw-pad{height:190px}}
