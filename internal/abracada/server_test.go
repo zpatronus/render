@@ -56,7 +56,7 @@ func TestRoomPrivacyLifecycleAndExpiry(t *testing.T) {
 	call("POST", "join", map[string]any{"code": code, "name": "第七位"}, nil, 409)
 	call("POST", "start", map[string]any{"code": code}, cookies[1], 403)
 	v = decode(call("POST", "start", map[string]any{"code": code}, host, 200))
-	if len(v.Game.Players) != 6 || v.Game.Supply != expanded || v.Game.Deck != 11 {
+	if len(v.Game.Players) != 6 || v.Game.Supply != expanded || v.Game.Deck != 8 || len(v.Game.Secrets) != 5 || v.Game.IDs != spellIDs {
 		t.Fatal("invalid six-player setup")
 	}
 	seats := []string{}

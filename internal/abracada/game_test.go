@@ -41,9 +41,36 @@ func TestSetupConservationAndExpansion(t *testing.T) {
 				t.Fatal("lost stone")
 			}
 		}
-		if n == 6 && (g.Supply != expanded || len(g.Deck) != 11) {
+		if n == 6 && (g.Supply != expanded || len(g.Deck) != 8 || len(g.Secrets) != 5 || g.IDs != spellIDs) {
 			t.Fatal("wrong expansion")
 		}
+	}
+}
+func TestHumanRollWaitsForDrawAndKeepsSpellID(t *testing.T) {
+	g := fixture(t, 6)
+	g.Players[0].Hand = []int{3, 8}
+	g.Players[0].Life = 3
+	if err := g.actHuman("0", "cast", 3, 0); err != nil || g.Phase != "rolling" || g.Players[0].Life != 3 {
+		t.Fatal("human roll should wait before applying the spell", err)
+	}
+	if err := g.actRoll("0", 2); err != nil || g.Players[0].Life != 5 || g.Phase != "playing" {
+		t.Fatal("draw result was not applied", err)
+	}
+	if g.IDs[7] != 8 || g.Supply[7] != 9 || len(g.Secrets) != 5 {
+		t.Fatal("six-player healing count changed its spell ID or secret count")
+	}
+}
+func TestHumanDragonBackfireWaitsForDraw(t *testing.T) {
+	g := fixture(t, 2)
+	g.Players[0].Hand = []int{8, 8}
+	if err := g.actHuman("0", "cast", 1, 0); err != nil || g.Phase != "rolling" || g.Players[0].Life != 6 {
+		t.Fatal("dragon backfire should wait for the human roll", err)
+	}
+	if err := g.actRoll("0", 3); err != nil || g.Players[0].Life != 3 || g.Turn != 1 {
+		t.Fatal("dragon backfire did not apply the drawn result", err)
+	}
+	if last := g.Events[len(g.Events)-1]; last.Roll != 3 || !strings.Contains(last.Text, "反噬") {
+		t.Fatal("backfire result was not recorded", last)
 	}
 }
 func TestPrivateHandAndSecretNeverLeak(t *testing.T) {
@@ -61,6 +88,17 @@ func TestPrivateHandAndSecretNeverLeak(t *testing.T) {
 	data, _ := json.Marshal(v)
 	if strings.Contains(string(data), `"Tablets"`) {
 		t.Fatal("private internals exposed")
+	}
+}
+func TestOwnHandIsRevealedAfterRoundEnds(t *testing.T) {
+	g := fixture(t, 3)
+	g.Players[0].Hand = []int{8, 2}
+	if got := g.view("0").Players[0].Hand; len(got) != 2 || got[0] != 0 || got[1] != 0 {
+		t.Fatal("own hand should stay hidden during play")
+	}
+	g.Phase = "round-end"
+	if got := g.view("0").Players[0].Hand; len(got) != 2 || got[0] != 8 || got[1] != 2 {
+		t.Fatal("own hand should be revealed after the round")
 	}
 }
 func TestNeighborsAndCounterclockwiseTurns(t *testing.T) {

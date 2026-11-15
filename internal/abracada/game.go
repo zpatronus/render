@@ -8,10 +8,11 @@ import (
 	"math/big"
 )
 
-// Spell kinds stay stable internally. Display numbers equal supply counts.
+// Spell kinds and IDs stay stable internally; six-player supply adds one stone to kinds 2–8.
 var spellNames = [8]string{"远古巨龙", "黑暗幽灵", "甜蜜的梦", "猫头鹰", "闪电风暴", "冰晶术", "火球术", "治疗药水"}
 var standard = [8]int{1, 2, 3, 4, 5, 6, 7, 8}
-var expanded = [8]int{1, 3, 4, 5, 6, 7, 8, 11}
+var expanded = [8]int{1, 3, 4, 5, 6, 7, 8, 9}
+var spellIDs = [8]int{1, 2, 3, 4, 5, 6, 7, 8}
 
 type member struct {
 	ID   string `json:"id"`
@@ -34,16 +35,21 @@ type event struct {
 	Targets []string `json:"targets,omitempty"`
 	Text    string   `json:"text"`
 }
+type pendingCast struct {
+	actor, kind, position, eventIndex int
+	success                           bool
+}
 type game struct {
 	ID                                      string
 	Players                                 []wizard
-	Supply, Removed, Used                   [8]int
+	Supply, IDs, Removed, Used              [8]int
 	Deck, Secrets                           []int
 	Phase                                   string
 	Round, Step, Turn, Last, Next, Sequence int
 	Events                                  []event
 	Reason                                  string
 	Winners                                 []string
+	Pending                                 *pendingCast
 	roll                                    func() int
 }
 
@@ -65,7 +71,7 @@ func newGame(members []member, first int) (*game, error) {
 	if len(members) < 2 || len(members) > 6 || first < 0 || first >= len(members) {
 		return nil, errors.New("需要 2–6 位魔法师")
 	}
-	g := &game{ID: token(8), Supply: standard, Last: -1, roll: func() int { return random(3) + 1 }}
+	g := &game{ID: token(8), Supply: standard, IDs: spellIDs, Last: -1, roll: func() int { return random(3) + 1 }}
 	if len(members) == 6 {
 		g.Supply = expanded
 	}
@@ -84,6 +90,7 @@ func (g *game) log(e event) {
 func (g *game) beginRound(first int) {
 	g.Round++
 	g.Step++
+	g.Pending = nil
 	g.Turn = first
 	g.Last = -1
 	g.Phase = "playing"
@@ -118,7 +125,11 @@ func (g *game) beginRound(first int) {
 	for _, kind := range g.draw(remove) {
 		g.Removed[kind-1]++
 	}
-	g.Secrets = g.draw(4)
+	secretCount := 4
+	if len(g.Players) == 6 {
+		secretCount = 5
+	}
+	g.Secrets = g.draw(secretCount)
 	g.log(event{Kind: "round", Text: fmt.Sprintf("第 %d 轮开始，%s 先施法；按逆时针顺序行动", g.Round, g.Players[first].Member.Name)})
 }
 func (g *game) draw(n int) []int {
@@ -144,6 +155,99 @@ func (g *game) endTurn() {
 	p.Hand = append(p.Hand, g.draw(5-len(p.Hand))...)
 	g.Turn = g.right(g.Turn)
 	g.Last = -1
+}
+
+func (g *game) actRoll(id string, value int) error {
+	if g.Phase != "rolling" || g.Pending == nil || g.Players[g.Pending.actor].Member.ID != id {
+		return errors.New("当前没有等待你的掷骰")
+	}
+	if value < 1 || value > 3 {
+		return errors.New("骰子点数必须是 1–3")
+	}
+	pending := *g.Pending
+	g.Pending = nil
+	g.Phase = "playing"
+	e := &g.Events[pending.eventIndex]
+	e.Roll = value
+	g.resolveCast(pending.actor, pending.kind, pending.position, pending.success, e)
+	g.Step++
+	return nil
+}
+
+func (g *game) resolveCast(actor, kind, position int, success bool, e *event) {
+	p := &g.Players[actor]
+	label := fmt.Sprintf("%d 号%s", g.IDs[kind-1], spellNames[kind-1])
+	if !success {
+		loss := 1
+		if kind == 1 {
+			if e.Roll == 0 {
+				e.Roll = g.roll()
+			}
+			loss = e.Roll
+		}
+		p.Life = max(0, p.Life-loss)
+		e.Text = fmt.Sprintf("%s 尝试%s失败，反噬失去 %d 点生命", p.Member.Name, label, loss)
+		if !g.finishIfNeeded() {
+			g.endTurn()
+		}
+		return
+	}
+	p.Hand = append(p.Hand[:position], p.Hand[position+1:]...)
+	g.Used[kind-1]++
+	g.Last = kind - 1
+	damage := map[int]int{}
+	switch kind {
+	case 1:
+		if e.Roll == 0 {
+			e.Roll = g.roll()
+		}
+		for i := range g.Players {
+			if i != actor {
+				damage[i] = e.Roll
+			}
+		}
+	case 2:
+		for i := range g.Players {
+			if i != actor {
+				damage[i] = 1
+			}
+		}
+		p.Life = min(6, p.Life+1)
+	case 3:
+		if e.Roll == 0 {
+			e.Roll = g.roll()
+		}
+		p.Life = min(6, p.Life+e.Roll)
+	case 4:
+		for _, k := range g.Secrets {
+			if k != 0 {
+				g.Phase = "owl"
+				break
+			}
+		}
+	case 5:
+		damage[g.left(actor)] = 1
+		damage[g.right(actor)] = 1
+	case 6:
+		damage[g.left(actor)] = 1
+	case 7:
+		damage[g.right(actor)] = 1
+	case 8:
+		p.Life = min(6, p.Life+1)
+	}
+	for i := range g.Players {
+		if n := damage[i]; n > 0 {
+			g.Players[i].Life = max(0, g.Players[i].Life-n)
+			e.Targets = append(e.Targets, g.Players[i].Member.ID)
+		}
+	}
+	e.Text = p.Member.Name + " 成功施放" + label
+	if e.Roll > 0 {
+		e.Text += fmt.Sprintf("，骰出 %d 点", e.Roll)
+	}
+	if g.Phase != "owl" {
+		g.finishIfNeeded()
+	}
 }
 func (g *game) finishIfNeeded() bool {
 	actor := g.Turn
@@ -212,6 +316,12 @@ func (g *game) finishIfNeeded() bool {
 	return true
 }
 func (g *game) act(id, action string, kind, slot int) error {
+	return g.actWithRoll(id, action, kind, slot, 0, false)
+}
+func (g *game) actHuman(id, action string, kind, slot int) error {
+	return g.actWithRoll(id, action, kind, slot, 0, true)
+}
+func (g *game) actWithRoll(id, action string, kind, slot, roll int, human bool) error {
 	if g.index(id) != g.Turn {
 		return errors.New("还没轮到你")
 	}
@@ -258,75 +368,23 @@ func (g *game) act(id, action string, kind, slot int) error {
 		}
 	}
 	e := event{Kind: "cast", Actor: id, Spell: kind, Success: position >= 0}
-	label := fmt.Sprintf("%d 号%s", g.Supply[kind-1], spellNames[kind-1])
 	g.Step++
-	if position < 0 {
-		loss := 1
-		if kind == 1 {
-			e.Roll = g.roll()
-			loss = e.Roll
-		}
-		p.Life = max(0, p.Life-loss)
-		e.Text = fmt.Sprintf("%s 尝试%s失败，反噬失去 %d 点生命", p.Member.Name, label, loss)
+	needsRoll := kind == 1 || (position >= 0 && kind == 3)
+	if needsRoll && human && p.Member.Bot == false {
+		g.Phase = "rolling"
+		e.Text = fmt.Sprintf("%s 正在施放 %d 号%s", p.Member.Name, g.IDs[kind-1], spellNames[kind-1])
 		g.log(e)
-		if !g.finishIfNeeded() {
-			g.endTurn()
-		}
+		g.Pending = &pendingCast{actor: g.Turn, kind: kind, position: position, eventIndex: len(g.Events) - 1, success: position >= 0}
 		return nil
 	}
-	p.Hand = append(p.Hand[:position], p.Hand[position+1:]...)
-	g.Used[kind-1]++
-	g.Last = kind - 1
-	damage := map[int]int{}
-	switch kind {
-	case 1:
-		e.Roll = g.roll()
-		for i := range g.Players {
-			if i != g.Turn {
-				damage[i] = e.Roll
-			}
+	if needsRoll {
+		e.Roll = roll
+		if e.Roll == 0 {
+			e.Roll = g.roll()
 		}
-	case 2:
-		for i := range g.Players {
-			if i != g.Turn {
-				damage[i] = 1
-			}
-		}
-		p.Life = min(6, p.Life+1)
-	case 3:
-		e.Roll = g.roll()
-		p.Life = min(6, p.Life+e.Roll)
-	case 4:
-		for _, k := range g.Secrets {
-			if k != 0 {
-				g.Phase = "owl"
-				break
-			}
-		}
-	case 5:
-		damage[g.left(g.Turn)] = 1
-		damage[g.right(g.Turn)] = 1
-	case 6:
-		damage[g.left(g.Turn)] = 1
-	case 7:
-		damage[g.right(g.Turn)] = 1
-	case 8:
-		p.Life = min(6, p.Life+1)
-	}
-	for i := range g.Players {
-		if n := damage[i]; n > 0 {
-			g.Players[i].Life = max(0, g.Players[i].Life-n)
-			e.Targets = append(e.Targets, g.Players[i].Member.ID)
-		}
-	}
-	e.Text = p.Member.Name + " 成功施放" + label
-	if e.Roll > 0 {
-		e.Text += fmt.Sprintf("，骰出 %d 点", e.Roll)
 	}
 	g.log(e)
-	if g.Phase != "owl" {
-		g.finishIfNeeded()
-	}
+	g.resolveCast(g.Turn, kind, position, position >= 0, &g.Events[len(g.Events)-1])
 	return nil
 }
 
@@ -350,6 +408,7 @@ type gameView struct {
 	CanEnd  bool         `json:"canEnd"`
 	Players []playerView `json:"players"`
 	Supply  [8]int       `json:"supply"`
+	IDs     [8]int       `json:"ids"`
 	Removed [8]int       `json:"removed"`
 	Used    [8]int       `json:"used"`
 	Deck    int          `json:"deck"`
@@ -360,10 +419,10 @@ type gameView struct {
 }
 
 func (g *game) view(id string) *gameView {
-	v := &gameView{ID: g.ID, Phase: g.Phase, Round: g.Round, Step: g.Step, Turn: g.Players[g.Turn].Member.ID, Minimum: g.Last + 1, CanEnd: g.Last >= 0, Supply: g.Supply, Removed: g.Removed, Used: g.Used, Deck: len(g.Deck), Events: append([]event(nil), g.Events...), Reason: g.Reason, Winners: append([]string(nil), g.Winners...)}
+	v := &gameView{ID: g.ID, Phase: g.Phase, Round: g.Round, Step: g.Step, Turn: g.Players[g.Turn].Member.ID, Minimum: g.Last + 1, CanEnd: g.Last >= 0, Supply: g.Supply, IDs: g.IDs, Removed: g.Removed, Used: g.Used, Deck: len(g.Deck), Events: append([]event(nil), g.Events...), Reason: g.Reason, Winners: append([]string(nil), g.Winners...)}
 	for i, p := range g.Players {
 		hand := make([]int, len(p.Hand))
-		if p.Member.ID != id {
+		if p.Member.ID != id || g.Phase == "round-end" || g.Phase == "finished" {
 			copy(hand, p.Hand)
 		}
 		v.Players = append(v.Players, playerView{member: p.Member, Life: p.Life, Score: p.Score, Gain: p.Gain, Hand: hand, Tablets: len(p.Tablets), Left: g.Players[g.left(i)].Member.ID, Right: g.Players[g.right(i)].Member.ID})

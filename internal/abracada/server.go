@@ -119,6 +119,7 @@ type request struct {
 	Slot  int    `json:"slot"`
 	Count int    `json:"count"`
 	Emoji string `json:"emoji"`
+	Roll  int    `json:"roll"`
 }
 
 func (s *server) api(w http.ResponseWriter, q *http.Request) {
@@ -329,13 +330,19 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 		cookie(w, q, r.Code, "")
 		respond(w, 200, map[string]bool{"left": true})
 		return
-	case "cast", "end", "take":
+	case "cast", "end", "take", "roll":
 		if r.Game == nil || in.Game != r.Game.ID || in.Step != r.Game.Step {
 			fail(w, 409, "游戏状态已更新，请重试")
 			return
 		}
-		if e := r.Game.act(id, action, in.Spell, in.Slot); e != nil {
-			fail(w, 409, e.Error())
+		var err error
+		if action == "roll" {
+			err = r.Game.actRoll(id, in.Roll)
+		} else {
+			err = r.Game.actHuman(id, action, in.Spell, in.Slot)
+		}
+		if err != nil {
+			fail(w, 409, err.Error())
 			return
 		}
 	default:

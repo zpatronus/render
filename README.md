@@ -5,7 +5,7 @@ Small games and tools in one Go service, deployable anywhere that runs Go.
 - `/` — project home
 - `/formula-war/` — Formula War
 - `/undercover/` — 谁是卧底: join a room, configure undercover/blank counts, and privately view cards. Discussion and voting happen offline. Rooms expire after 15 minutes without a room request.
-- `/abracada/` — 出包魔法师，中文在线魔法推理桌游，2–5 人标准玩法、六人 45 石扩展，自绘 SVG、SSE、可添加机器人。
+- `/abracada/` — 出包魔法师，中文在线魔法推理桌游，2–5 人标准玩法、六人扩展，自绘 SVG、SSE、可添加机器人。
 - `/secret-hitler/` — 揭秘希特勒，1–10 人中文在线桌游，可添加机器人补足规则所需的 5–10 席
 
 ## Local development
@@ -74,10 +74,10 @@ The Chinese adaptation in `internal/secrethitler/` is licensed under **CC BY-NC-
 
 ## 出包魔法师
 
-`/abracada/` implements the Chinese game with authenticated, per-player SSE views. A player's own spell stones remain hidden; captured 秘法石板 are fetched separately through the private endpoint. Bots use the same public view and their own captured tablets, with 4 seconds between operations so spell announcements and results remain visible.
+`/abracada/` implements the Chinese game with authenticated, per-player SSE views. A player's own spell stones remain hidden during play and are revealed at round end; captured 秘法石板 are fetched separately through the private endpoint. Bots use the same public view and their own captured tablets, with 4 seconds between operations so spell announcements and results remain visible.
 
 - Standard 2–5 player supply: **1, 2, 3, 4, 5, 6, 7, 8** (36 stones).
-- Custom six-player supply: **1, 3, 4, 5, 6, 7, 8, 11** (45 stones).
+- Six-player supply: **1, 3, 4, 5, 6, 7, 8, 9** (43 stones). Spell IDs remain 1–8; five secret tablets leave eight stones in the draw pile after dealing.
 - Seat order and the first starter are randomized once. Turns proceed counterclockwise; subsequent rounds start with the player who ended the previous round.
 - Original game: **Abracada...What?**, designed by Gary Kim. [Chinese rules reference](https://gameurlife.pixnet.net/blog/posts/10335625152) · [English rules reference](https://www.rulespal.com/abracada-what/rulebook).
 - Rules, UI and SVG illustrations are independently implemented. The counterclockwise sequence, subsequent-round starter and six-player supply follow this project's selected rules.

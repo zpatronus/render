@@ -17,14 +17,19 @@ function confirm(title,fn,label='确认施法'){$('confirm-title').textContent=t
 $('confirm-accept').onclick=()=>{const f=pending;$('confirm-dialog').close();f?.()};for(const id of ['confirm-close','confirm-cancel'])$(id).onclick=()=>$('confirm-dialog').close();for(const kind of ['rules','tablets']){$(kind+'-close').onclick=()=>$(kind+'-dialog').close()}$('rules-open').onclick=()=>$('rules-dialog').showModal();
 try{$('name').value=localStorage.getItem('abr-name')||'';}catch{}
 $('entry-form').onsubmit=async e=>{e.preventDefault();try{const nickname=$('name').value.trim();const next=await api(e.submitter?.dataset.entry||'create',{name:nickname,code:$('code').value.trim()});try{localStorage.setItem('abr-name',nickname);}catch{}location.hash=next.code;render(next);connect()}catch(e){message(e.message)}};
-let presentationChain=Promise.resolve(),presentationActive=false,presentationGame='',presentationThrough=0,presentationEpoch=0,scheduledSnapshot='';
+let presentationChain=Promise.resolve(),presentationActive=false,presentationGame='',presentationThrough=0,presentationEpoch=0,scheduledSnapshot='',resolvedRollView=null,rollWaiter=null,pendingRollPresentation='';
 function render(next){
  const encoded=JSON.stringify(next);if(encoded===scheduledSnapshot)return presentationChain;
  const game=next.game;
+ if(rollWaiter&&game?.id===presentationGame&&game.phase!=='rolling'){
+  const rolled=game.events.find(e=>e.id===rollWaiter.eventID&&e.roll>0);
+  if(rolled){resolvedRollView=next;rollWaiter.resolve(next);rollWaiter=null;}
+ }
  if(!game||presentationGame!==game.id||!room?.game){
   presentationEpoch++;presentationGame=game?.id||'';presentationThrough=Math.max(0,...(game?.events||[]).map(e=>e.id));presentationActive=false;scheduledSnapshot=encoded;$('cast-stage').hidden=true;presentationChain=Promise.resolve();renderNow(next);return presentationChain;
  }
  const casts=game.events.filter(e=>e.kind==='cast'&&e.id>presentationThrough);
+ const passes=game.events.filter(e=>e.kind==='pass'&&e.id>presentationThrough);
  presentationThrough=Math.max(presentationThrough,...game.events.map(e=>e.id));scheduledSnapshot=encoded;
  const epoch=presentationEpoch;
  presentationChain=presentationChain.then(async()=>{
@@ -33,14 +38,32 @@ function render(next){
   try{
    for(const event of casts){
     showCastStage(event,game);
-    await new Promise(resolve=>setTimeout(resolve,2100));
+    await new Promise(resolve=>setTimeout(resolve,1000));
     if(epoch!==presentationEpoch)return;
     $('cast-stage').dataset.result=event.success?'success':'backfire';
     $('cast-stage-result').textContent=event.success?'施法成功':'反噬';
     $('cast-stage').setAttribute('aria-label',event.success?'施法成功':'施法反噬');
-    await new Promise(resolve=>setTimeout(resolve,750));
+    if(next.game.phase==='rolling'&&(event.roll||0)===0){
+     if(next.game.turn===room.you){
+      const value=await drawRoll(event,epoch);
+      if(epoch!==presentationEpoch)return;
+      const resolved=await api('roll',{code:next.code,game:next.game.id,step:next.game.step,roll:value});
+      resolvedRollView=resolved;
+     }else{
+      resolvedRollView=await waitForRoll(event,epoch);
+     }
+     if(epoch!==presentationEpoch)return;
+     next=resolvedRollView||next;resolvedRollView=null;
+    }
+    Object.assign(event,next.game?.events?.find(e=>e.id===event.id)||{});
+    if(event.roll){
+     $('cast-stage-result').textContent=(event.success?'施法成功':'反噬')+'（投到 '+event.roll+' 点）';
+    }
+    await new Promise(resolve=>setTimeout(resolve,event.roll?1400:750));
+    if(!event.success)await new Promise(resolve=>setTimeout(resolve,500));
     if(epoch!==presentationEpoch)return;
    }
+   if(!casts.length&&passes.length)await new Promise(resolve=>setTimeout(resolve,350));
    $('cast-stage').hidden=true;renderNow(next);
    if(casts.length){$('cast-notice').hidden=true;if(['round-end','finished'].includes(game.phase)){$('round-result').hidden=true;await new Promise(resolve=>setTimeout(resolve,1320));if(epoch===presentationEpoch)$('round-result').hidden=false}}
   }finally{if(epoch===presentationEpoch){presentationActive=false;$('cast-stage').hidden=true}}
@@ -51,29 +74,75 @@ function showCastStage(event,game){
  const stage=$('cast-stage');stage.dataset.result='pending';
  $('cast-stage-name').textContent=game.players.find(p=>p.id===event.actor)?.name||'';
  $('cast-stage-spell').textContent=names[event.spell-1];
- $('cast-stage-number').textContent=game.supply[event.spell-1];
+ $('cast-stage-number').textContent=game.ids[event.spell-1];
  $('cast-stage-number').className='spell-number spell-'+event.spell;
  $('cast-stage-art').replaceChildren(img(arts[event.spell-1]));
- $('cast-stage-result').textContent='?';stage.setAttribute('aria-label','正在施放'+names[event.spell-1]+'，等待结果');stage.dataset.player=event.actor;stage.hidden=false;positionCastCallout();
+ $('cast-draw').hidden=true;$('cast-stage-result').textContent='?';stage.setAttribute('aria-label','正在施放'+names[event.spell-1]+'，等待结果');stage.dataset.player=event.actor;stage.hidden=false;positionCastCallout();
 }
-function renderNow(next){const callout=$('cast-stage');if(callout?.hidden&&callout.parentElement!==document.body)document.body.append(callout);const encoded=JSON.stringify(next);if(encoded===snapshot)return;if(room?.code!==next.code||room?.game?.id!==next.game?.id||room?.game?.step!==next.game?.step){$('confirm-dialog').close();pending=null;}if(room?.code!==next.code||room?.game?.id!==next.game?.id||room?.game?.round!==next.game?.round){$('tablets-dialog').close();$('owl-dialog').close();}snapshot=encoded;room=next;$('entry').hidden=true;$('room').hidden=false;$('room-code').textContent='魔法桌 '+room.code;$('lobby').hidden=!!room.game;$('game').hidden=!room.game;$('phase-title').textContent=room.game?'出包魔法师':'等待魔法师';if(!room.game){$('lobby-count').textContent=(room.members.length+room.bots)+' / 6';const lobbyPeople=room.members.concat(Array.from({length:room.bots},(_,i)=>({id:'preview-'+i,name:['星尘学徒','苔藓术士','月光使者','迷雾巫师','琥珀法师'][i],bot:true})));$('lobby-seats').replaceChildren(...lobbyPeople.map((p,i)=>{const c=el('article',undefined,'lobby-seat');c.append(el('span',String(i+1).padStart(2,'0'),'lobby-index'),el('h3',p.name),el('span',p.bot?'机器人':p.id===room.host?'房主':'','lobby-role'));return c}));$('bots').value=room.bots;$('bots').max=6-room.members.length;$('bots').disabled=room.you!==room.host;$('start').hidden=room.you!==room.host;$('mode-note').textContent=room.members.length+room.bots===6?'六人扩展 · 45 个魔法石 · 治疗药水 11 号':'标准玩法 · 36 个魔法石';return}
+function drawRoll(event,epoch){
+ const wrap=$('cast-draw'),canvas=$('cast-draw-pad'),ctx=canvas.getContext('2d'),button=$('cast-draw-button');
+ wrap.hidden=false;ctx.clearRect(0,0,canvas.width,canvas.height);ctx.lineWidth=8;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#e7d59e';
+ const points=[];let drawing=false;
+ const finish=()=>{
+  if(epoch!==presentationEpoch)return;
+  canvas.onpointerdown=canvas.onpointermove=canvas.onpointerup=canvas.onpointercancel=null;button.onclick=null;wrap.hidden=true;
+  let seed=Date.now()>>>0;for(const p of points)seed=Math.imul(seed^p.x,16777619)>>>0,seed=Math.imul(seed^p.y,16777619)>>>0,seed=Math.imul(seed^p.t,16777619)>>>0;
+  return resolve(1+seed%3);
+ };
+ let resolve;const result=new Promise(r=>resolve=r);
+ canvas.onpointerdown=e=>{e.preventDefault();drawing=true;canvas.setPointerCapture(e.pointerId);const r=canvas.getBoundingClientRect(),p={x:Math.round((e.clientX-r.left)*canvas.width/r.width),y:Math.round((e.clientY-r.top)*canvas.height/r.height),t:Math.round(performance.now())};points.push(p);ctx.beginPath();ctx.moveTo(p.x,p.y)};
+ canvas.onpointermove=e=>{if(!drawing)return;const r=canvas.getBoundingClientRect(),p={x:Math.round((e.clientX-r.left)*canvas.width/r.width),y:Math.round((e.clientY-r.top)*canvas.height/r.height),t:Math.round(performance.now())};points.push(p);ctx.lineTo(p.x,p.y);ctx.stroke()};
+ canvas.onpointerup=e=>{if(drawing){drawing=false;finish()}};canvas.onpointercancel=()=>{if(drawing){drawing=false;finish()}};
+  button.onclick=()=>{if(points.length===0)points.push({x:0,y:0,t:Date.now()>>>0});finish()};
+ positionCastCallout();return result;
+}
+function waitForRoll(event,epoch){
+ const found=room?.game?.events.find(e=>e.id===event.id&&e.roll>0);if(found)return Promise.resolve(room);
+ return new Promise(resolve=>{rollWaiter={eventID:event.id,resolve};const check=()=>{if(epoch!==presentationEpoch){rollWaiter=null;resolve(null);return}setTimeout(check,250)};check()});
+}
+function renderNow(next){const callout=$('cast-stage');if(callout?.hidden&&callout.parentElement!==document.body)document.body.append(callout);const encoded=JSON.stringify(next);if(encoded===snapshot)return;if(room?.code!==next.code||room?.game?.id!==next.game?.id||room?.game?.step!==next.game?.step){$('confirm-dialog').close();pending=null;}if(room?.code!==next.code||room?.game?.id!==next.game?.id||room?.game?.round!==next.game?.round){$('tablets-dialog').close();$('owl-dialog').close();}snapshot=encoded;room=next;$('entry').hidden=true;$('room').hidden=false;$('room-code').textContent='魔法桌 '+room.code;$('lobby').hidden=!!room.game;$('game').hidden=!room.game;$('phase-title').textContent=room.game?'出包魔法师':'等待魔法师';if(!room.game){$('lobby-count').textContent=(room.members.length+room.bots)+' / 6';const lobbyPeople=room.members.concat(Array.from({length:room.bots},(_,i)=>({id:'preview-'+i,name:['星尘学徒','苔藓术士','月光使者','迷雾巫师','琥珀法师'][i],bot:true})));$('lobby-seats').replaceChildren(...lobbyPeople.map((p,i)=>{const c=el('article',undefined,'lobby-seat');c.append(el('span',String(i+1).padStart(2,'0'),'lobby-index'),el('h3',p.name),el('span',p.bot?'机器人':p.id===room.host?'房主':'','lobby-role'));return c}));$('bots').replaceChildren(...Array.from({length:6},(_,count)=>{const button=el('button',String(count));button.type='button';button.disabled=room.you!==room.host||count>6-room.members.length;button.setAttribute('aria-pressed',String(count===room.bots));button.onclick=()=>act('bots',{count});return button}));$('start').hidden=room.you!==room.host;$('mode-note').textContent=room.members.length+room.bots===6?'六人扩展 · 43 个魔法石 · 5 个秘法石板':'标准玩法 · 36 个魔法石';return}
 const g=room.game,own=g.players.find(p=>p.id===room.you);const tabletKey=currentTabletKey();if(knownTabletKey!==tabletKey){knownTabletKey=tabletKey;knownTablets=[];tabletRequest=null;}if(own.tablets>knownTablets.length)loadKnownTablets().catch(()=>{});const by=id=>g.players.find(p=>p.id===id)?.name||'';if(gameID!==g.id){gameID=g.id;last=Math.max(0,...g.events.map(e=>e.id))}const ended=['round-end','finished'].includes(g.phase);$('round-label').textContent='第 '+g.round+' 轮';$('mode-label').textContent=g.players.length===6?'六人扩展':'标准玩法';$('turn-label').textContent=ended?'本轮结束':by(g.turn)+(g.turn===room.you?' · 轮到你':'');$('neighbors').textContent='你的左邻：'+by(own.left)+' · 右邻／下家：'+by(own.right);
 $('score-strip').replaceChildren(...g.players.map(p=>{const score=el('div',undefined,'score-entry'+(p.id===room.you?' is-you':''));score.append(el('span',p.name),el('strong',p.score),el('span','/ 8','score-goal'));return score}));
 renderSeats(g,by);if(!$('emoji-menu').hidden)positionEmojiMenu();
-$('action-panel').hidden=ended;$('action-title').textContent=g.turn===room.you?'选择你的法术':'等待 '+by(g.turn);$('action-help').textContent=g.canEnd?'可以继续施法，编号不能降低，也可以收手补牌。':'每回合至少尝试一次施法。';$('end-turn').disabled=g.turn!==room.you||!g.canEnd||g.phase!=='playing';$('spell-buttons').hidden=g.phase==='owl';$('spell-buttons').replaceChildren(...names.map((n,i)=>{const b=el('button',undefined,'spell-'+(i+1));b.append(el('b',g.supply[i],'spell-number'),img(arts[i]),el('strong',n));b.title=effects[i];b.disabled=g.turn!==room.you||i+1<g.minimum||g.phase!=='playing';b.onclick=()=>confirm('施放 '+g.supply[i]+' 号'+n+'？',()=>act('cast',{spell:i+1}));return b}));$('secret-choice').hidden=g.phase!=='owl'||g.turn!==room.you;$('secret-slots').replaceChildren(...g.secrets.map((available,i)=>{const b=el('button','石板 '+(i+1));b.disabled=!available||g.turn!==room.you;b.onclick=()=>openOwl();return b}));
-$('deck-count').textContent='抽牌堆 '+g.deck;renderCountBoard(g);if(g.phase==='owl'&&g.turn===room.you&&owlKey!==g.id+':'+g.step){owlKey=g.id+':'+g.step;queueMicrotask(openOwl);}
+ $('action-panel').hidden=ended||g.turn!==room.you||g.phase==='rolling';$('action-title').textContent=g.turn===room.you?'选择你的法术':'等待 '+by(g.turn);$('action-help').textContent=g.canEnd?'可以继续施法，编号不能降低，也可以收手补牌。':'每回合至少尝试一次施法。';$('end-turn').disabled=g.turn!==room.you||!g.canEnd||g.phase!=='playing';$('spell-buttons').hidden=g.phase==='owl';$('spell-buttons').replaceChildren(...names.map((n,i)=>{const b=el('button',undefined,'spell-'+(i+1));b.append(el('b',g.ids[i],'spell-number'),img(arts[i]),el('strong',n));b.title=effects[i];b.disabled=g.turn!==room.you||i+1<g.minimum||g.phase!=='playing';b.onclick=()=>confirm('施放 '+g.ids[i]+' 号'+n+'？',()=>act('cast',{spell:i+1}));return b}));$('secret-choice').hidden=g.phase!=='owl'||g.turn!==room.you;$('secret-slots').replaceChildren(...g.secrets.map((available,i)=>{const b=el('button','石板 '+(i+1));b.disabled=!available||g.turn!==room.you;b.onclick=()=>openOwl();return b}));
+ $('deck-count').textContent='抽牌堆 '+g.deck;renderCountBoard(g);if(g.phase==='owl'&&g.turn===room.you&&owlKey!==g.id+':'+g.step){owlKey=g.id+':'+g.step;queueMicrotask(openOwl);}
 $('secret-count').textContent='中央剩余 '+g.secrets.filter(Boolean).length+' 个 · 你持有 '+own.tablets+' 个';$('round-result').hidden=!ended;$('result-title').textContent=g.phase==='finished'?'获胜：'+g.winners.map(by).join('、'):'本轮结束';$('result-reason').textContent=g.reason;$('scoreboard').replaceChildren(...g.players.map(p=>el('div',p.name+' · 本轮 +'+p.gain+' · 累计 '+p.score+' 分')));$('next-round').textContent=g.phase==='finished'?'重新开局':'下一轮';$('next-round').hidden=room.you!==room.host;$('next-wait').textContent=room.you===room.host?'':'等待房主继续';$('history').replaceChildren(...g.events.slice().reverse().map(e=>el('li','第 '+e.round+' 轮 · '+e.text)));
 for(const e of g.events){if(e.id<=last)continue;last=e.id;if(e.kind==='cast'){animateCast(e);const notice=$('cast-notice');notice.replaceChildren(el('span',e.text));notice.hidden=false;clearTimeout(notice.timer);notice.timer=setTimeout(()=>notice.hidden=true,2600);if(e.roll){const die=img('die-'+e.roll);die.style.width='45px';notice.append(die)}}}}
-$('bots').onchange=()=>act('bots',{count:Number($('bots').value)});$('start').onclick=()=>act('start');$('end-turn').onclick=()=>confirm('结束回合并补牌？',()=>act('end'),'结束回合');$('next-round').onclick=()=>act(room.game.phase==='finished'?'reset':'next');$('invite').onclick=async()=>{try{await navigator.clipboard.writeText(location.href);message('邀请链接已复制')}catch{message(location.href)}};$('leave').onclick=()=>confirm('离开魔法桌？游戏中保留席位。',async()=>{if(!room.game||room.game.phase==='finished')await act('leave');stream?.close();room=null;location.hash='';$('entry').hidden=false;$('room').hidden=true});$('tablets-open').onclick=async()=>{try{const v=await loadKnownTablets();$('my-tablets').replaceChildren(...v.tablets.map(k=>{const c=el('div',undefined,'spell-'+k);c.append(el('b',room.game.supply[k-1],'spell-number'),img(arts[k-1]),el('p',names[k-1]));return c}));$('tablets-dialog').showModal()}catch(e){message(e.message)}};
-async function resume(){if(!/^[A-F0-9]{6}$/.test(code()))return;try{render(await api('room?code='+code()));connect()}catch(e){message(e.message)}}window.addEventListener('hashchange',resume);document.addEventListener('visibilitychange',()=>{if(document.hidden){stream?.close();$('tablets-dialog').close();$('owl-dialog').close()}else resume()});window.addEventListener('pagehide',()=>stream?.close());window.addEventListener('pageshow',resume);$('code').value=code();resume();
+$('start').onclick=()=>act('start');$('end-turn').onclick=()=>confirm('结束回合并补牌？',()=>act('end'),'结束回合');$('next-round').onclick=()=>act(room.game.phase==='finished'?'reset':'next');$('invite').onclick=async()=>{try{await navigator.clipboard.writeText(location.href);message('邀请链接已复制')}catch{message(location.href)}};$('leave').onclick=()=>confirm('离开魔法桌？游戏中保留席位。',async()=>{if(!room.game||room.game.phase==='finished')await act('leave');stream?.close();room=null;location.hash='';$('entry').hidden=false;$('room').hidden=true});$('tablets-open').onclick=async()=>{try{const v=await loadKnownTablets();$('my-tablets').replaceChildren(...v.tablets.map(k=>{const c=el('div',undefined,'spell-'+k);c.append(el('b',room.game.ids[k-1],'spell-number'),img(arts[k-1]),el('p',names[k-1]));return c}));$('tablets-dialog').showModal()}catch(e){message(e.message)}};
+async function resume(){if(!/^[A-F0-9]{6}$/.test(code()))return;try{const next=await api('room?code='+code());await render(next);connect();if(next.game?.phase==='rolling')resumePendingRoll(next)}catch(e){message(e.message)}}window.addEventListener('hashchange',resume);document.addEventListener('visibilitychange',()=>{if(document.hidden){stream?.close();$('tablets-dialog').close();$('owl-dialog').close()}else resume()});window.addEventListener('pagehide',()=>stream?.close());window.addEventListener('pageshow',resume);$('code').value=code();resume();
+
+async function resumePendingRoll(state){
+ const event=state.game.events.find(e=>e.kind==='cast'&&e.actor===state.game.turn&&!e.roll);if(!event)return;
+ const key=state.game.id+':'+event.id;if(pendingRollPresentation===key)return;pendingRollPresentation=key;
+ const epoch=presentationEpoch;presentationActive=true;showCastStage(event,state.game);
+ try{
+  await new Promise(resolve=>setTimeout(resolve,1000));if(epoch!==presentationEpoch)return;
+  $('cast-stage').dataset.result=event.success?'success':'backfire';$('cast-stage-result').textContent=event.success?'施法成功':'反噬';
+  let final;
+  if(state.you===event.actor){
+   const value=await drawRoll(event,epoch);if(epoch!==presentationEpoch)return;
+   final=await api('roll',{code:state.code,game:state.game.id,step:state.game.step,roll:value});
+  }else final=await waitForRoll(event,epoch);
+  if(!final||epoch!==presentationEpoch)return;
+  Object.assign(event,final.game.events.find(e=>e.id===event.id)||{});
+  $('cast-stage-result').textContent=(event.success?'施法成功':'反噬')+'（投到 '+event.roll+' 点）';
+  await new Promise(resolve=>setTimeout(resolve,1400));if(epoch!==presentationEpoch)return;
+  $('cast-stage').hidden=true;renderNow(final);
+ }catch(error){if(epoch===presentationEpoch)message(error.message)}
+ finally{pendingRollPresentation='';if(epoch===presentationEpoch){presentationActive=false;$('cast-stage').hidden=true}}
+}
 
 function animateCast(e){
  if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
  const source=document.querySelector('[data-player="'+e.actor+'"]');if(!source)return;
  const a=source.getBoundingClientRect();
- source.animate([{boxShadow:'0 0 0 transparent'},{boxShadow:'0 0 45px '+(e.success?'#e7d59e':'#f68060')},{boxShadow:'0 0 0 transparent'}],{duration:850});
- const targets=e.targets?.length?e.targets:[e.actor];
- for(const id of targets){const target=document.querySelector('[data-player="'+id+'"]');if(!target)continue;const b=target.getBoundingClientRect();const effect=img(arts[e.spell-1]);Object.assign(effect.style,{position:'fixed',width:'72px',height:'74px',left:(a.x+a.width/2-36)+'px',top:(a.y+a.height/2-37)+'px',filter:'drop-shadow(0 0 18px #e7d59e)'});$('effects').append(effect);const motion=effect.animate([{opacity:0,transform:'scale(.3) rotate(-25deg)'},{opacity:1,offset:.2,transform:'scale(1.2)'},{opacity:0,transform:'translate('+(b.x+b.width/2-a.x-a.width/2)+'px,'+(b.y+b.height/2-a.y-a.height/2)+'px) scale(.7) rotate(20deg)'}],{duration:900,easing:'ease-in-out'});motion.onfinish=()=>{effect.remove();if(!e.success||e.targets?.includes(id))shakeHit(document.querySelector('[data-player="'+id+'"]'))}}
+ if(!e.success){shakeHit(source,'#f68060');return}
+ const hits=new Map(),damage='#f68060',heal='#8fc58b',owl='#e7d59e';
+ if(e.spell===2){for(const id of e.targets||[])hits.set(id,damage);hits.set(e.actor,heal)}
+ else if(e.spell===3||e.spell===8)hits.set(e.actor,heal);
+ else if(e.spell===4)hits.set(e.actor,owl);
+ else for(const id of e.targets||[])hits.set(id,damage);
+ for(const [id,color] of hits){const target=document.querySelector('[data-player="'+id+'"]');if(!target)continue;const b=target.getBoundingClientRect();const effect=img(arts[e.spell-1]);Object.assign(effect.style,{position:'fixed',width:'72px',height:'74px',left:(a.x+a.width/2-36)+'px',top:(a.y+a.height/2-37)+'px',filter:'drop-shadow(0 0 18px '+color+')'});$('effects').append(effect);const motion=effect.animate([{opacity:0,transform:'scale(.3) rotate(-25deg)'},{opacity:1,offset:.2,transform:'scale(1.2)'},{opacity:0,transform:'translate('+(b.x+b.width/2-a.x-a.width/2)+'px,'+(b.y+b.height/2-a.y-a.height/2)+'px) scale(.7) rotate(20deg)'}],{duration:900,easing:'ease-in-out'});motion.onfinish=()=>{effect.remove();const recipient=document.querySelector('[data-player="'+id+'"]');if(color===heal)healHit(recipient);else if(color===owl)flashHit(recipient,color);else shakeHit(recipient,color)}}
 }
 
 function openOwl(){
@@ -87,18 +156,18 @@ async function chooseTablet(slot){
  await act('take',{slot});
  if(room?.game?.id!==id||room.game.round!==round||room.game.phase==='owl')return;
  $('owl-picks').hidden=true;
- try{const result=await loadKnownTablets();if(result.game!==id||result.round!==round)return;const k=result.tablets.at(-1);if(!k)return;const face=img(arts[k-1]),text=el('div',undefined,'spell-'+k);text.append(el('b',room.game.supply[k-1],'spell-number'),el('h3',names[k-1]));$('owl-result').replaceChildren(face,text);$('owl-result').hidden=false;$('owl-done').hidden=false;if(!matchMedia('(prefers-reduced-motion: reduce)').matches)face.animate([{opacity:0,transform:'rotateY(85deg) scale(.7)'},{opacity:1,transform:'rotateY(0) scale(1)'}],{duration:650,easing:'ease-out'});}catch(e){message(e.message);$('owl-dialog').close()}
+ try{const result=await loadKnownTablets();if(result.game!==id||result.round!==round)return;const k=result.tablets.at(-1);if(!k)return;const face=img(arts[k-1]),text=el('div',undefined,'spell-'+k);text.append(el('b',room.game.ids[k-1],'spell-number'),el('h3',names[k-1]));$('owl-result').replaceChildren(face,text);$('owl-result').hidden=false;$('owl-done').hidden=false;if(!matchMedia('(prefers-reduced-motion: reduce)').matches)face.animate([{opacity:0,transform:'rotateY(85deg) scale(.7)'},{opacity:1,transform:'rotateY(0) scale(1)'}],{duration:650,easing:'ease-out'});}catch(e){message(e.message);$('owl-dialog').close()}
 }
 $('owl-close').onclick=()=>$('owl-dialog').close();$('owl-done').onclick=()=>$('owl-dialog').close();
 
 // Finish framing the table before requesting the cast, so its animation starts in view.
 async function focusSeatForCast(){
  if(matchMedia('(min-width: 1100px)').matches)return;
- const seat=document.querySelector('.seat.self');if(!seat)return;
+ const button=$('end-turn');if(!button)return;
  const viewport=window.visualViewport;
  const bottom=(viewport?.height||innerHeight)+(viewport?.offsetTop||0);
  const start=window.scrollY;
- const target=Math.max(0,Math.min(document.documentElement.scrollHeight-innerHeight,start+seat.getBoundingClientRect().bottom-bottom+24));
+ const target=Math.max(0,Math.min(document.documentElement.scrollHeight-innerHeight,start+button.getBoundingClientRect().bottom-bottom+24));
  if(Math.abs(target-start)<2)return;
  if(matchMedia('(prefers-reduced-motion: reduce)').matches){window.scrollTo({top:target,behavior:'instant'});return;}
  await new Promise(resolve=>{
@@ -110,7 +179,7 @@ async function focusSeatForCast(){
  });
 }
 
-function renderCountBoard(g){const visible=Array(8).fill(0),privateCounts=Array(8).fill(0);if(knownTabletKey===currentTabletKey())for(const k of knownTablets)privateCounts[k-1]++;for(const player of g.players){if(player.id===room.you)continue;for(const kind of player.hand)if(kind)visible[kind-1]++}$('count-board').replaceChildren(...names.map((n,i)=>{const row=el('div',undefined,'count-row spell-'+(i+1));const label=el('div',undefined,'count-label');label.append(el('b',g.supply[i],'spell-number'),img(arts[i]),el('span',n),el('strong',(g.used[i]+g.removed[i]+visible[i]+privateCounts[i])+' / '+g.supply[i]));const slots=el('div',undefined,'count-slots');for(let j=0;j<g.supply[i];j++){const used=j<g.used[i]+g.removed[i],seen=!used&&j<g.used[i]+g.removed[i]+visible[i],mine=!used&&!seen&&j<g.used[i]+g.removed[i]+visible[i]+privateCounts[i];const slot=el('span',g.supply[i],'count-slot '+(used?'used':seen?'visible':mine?'known-tablet':'unknown'));slot.title=used?'已公开':seen?'对手手中可见':mine?'我的秘法石板':'未知';slot.setAttribute('aria-label',g.supply[i]+'号：'+slot.title);slots.append(slot)}row.append(label,slots);row.title='已公开 '+(g.used[i]+g.removed[i])+' · 可见 '+visible[i]+' · 我的石板 '+privateCounts[i]+' · 未知 '+(g.supply[i]-g.used[i]-g.removed[i]-visible[i]-privateCounts[i]);return row}));}
+function renderCountBoard(g){const visible=Array(8).fill(0),privateCounts=Array(8).fill(0);if(knownTabletKey===currentTabletKey())for(const k of knownTablets)privateCounts[k-1]++;for(const player of g.players){if(player.id===room.you)continue;for(const kind of player.hand)if(kind)visible[kind-1]++}$('count-board').replaceChildren(...names.map((n,i)=>{const row=el('div',undefined,'count-row spell-'+(i+1));const label=el('div',undefined,'count-label');label.append(el('b',g.ids[i],'spell-number'),img(arts[i]),el('span',n),el('strong',(g.used[i]+g.removed[i]+visible[i]+privateCounts[i])+' / '+g.supply[i]));const slots=el('div',undefined,'count-slots');for(let j=0;j<g.supply[i];j++){const used=j<g.used[i]+g.removed[i],seen=!used&&j<g.used[i]+g.removed[i]+visible[i],mine=!used&&!seen&&j<g.used[i]+g.removed[i]+visible[i]+privateCounts[i];const slot=el('span',g.ids[i],'count-slot '+(used?'used':seen?'visible':mine?'known-tablet':'unknown'));slot.title=used?'已公开':seen?'对手手中可见':mine?'我的秘法石板':'未知';slot.setAttribute('aria-label',g.ids[i]+'号：'+slot.title);slots.append(slot)}row.append(label,slots);row.title='已公开 '+(g.used[i]+g.removed[i])+' · 可见 '+visible[i]+' · 我的石板 '+privateCounts[i]+' · 未知 '+(g.supply[i]-g.used[i]-g.removed[i]-visible[i]-privateCounts[i]);return row}));}
 
 function currentTabletKey(){return room?.game?room.code+':'+room.game.id+':'+room.game.round+':'+room.you:'';}
 function loadKnownTablets(){
@@ -124,13 +193,17 @@ function loadKnownTablets(){
  tabletRequest={key,promise};return promise;
 }
 
-function shakeHit(target){
+function flashHit(target,color='#f68060'){
  if(!target)return;
  const flash=el('div',undefined,'damage-flash');target.append(flash);
- const glow=flash.animate([{opacity:0},{opacity:1,offset:.2},{opacity:.65,offset:.5},{opacity:0}],{duration:400,easing:'ease-out'});glow.onfinish=()=>flash.remove();
- if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
- target.animate([{translate:'0px 0px'},{translate:'-2px 0px',offset:.25},{translate:'1.5px 0px',offset:.55},{translate:'-.5px 0px',offset:.8},{translate:'0px 0px'}],{duration:400,easing:'ease-in-out'});
+ flash.style.setProperty('--hit-flash',color);const glow=flash.animate([{opacity:0},{opacity:1,offset:.2},{opacity:.65,offset:.5},{opacity:0}],{duration:400,easing:'ease-out'});glow.onfinish=()=>flash.remove();
 }
+function shakeHit(target,color='#f68060'){
+ if(!target)return;flashHit(target,color);
+ if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+ target.animate([{translate:'0px 0px'},{translate:'-4px 0px',offset:.25},{translate:'3px 0px',offset:.55},{translate:'-1px 0px',offset:.8},{translate:'0px 0px'}],{duration:400,easing:'ease-in-out'});
+}
+function healHit(target){if(!target)return;flashHit(target,'#8fc58b');const heart=target.querySelector('.heart-icon');if(heart&&!matchMedia('(prefers-reduced-motion: reduce)').matches)heart.animate([{transform:'scale(1)'},{transform:'scale(1.28)',offset:.45},{transform:'scale(1)'}],{duration:560,easing:'ease-out'})}
 
 let emojiCatalog=null,emojiLoading=null,recentEmoji=[];
 try{const saved=JSON.parse(localStorage.getItem('abr-emoji-recent')||'[]');if(Array.isArray(saved))recentEmoji=[...new Set(saved.filter(x=>typeof x==='string'))].slice(0,10)}catch{}
@@ -206,15 +279,19 @@ function renderSeats(g,by){
   const heading=card.querySelector('h3'),name=p.name+(p.id===room.you?' · 你':'');if(heading.textContent!==name)heading.textContent=name;
   const health=card.querySelector('.life');
   if(health.dataset.value!==String(p.life)){
-   health.dataset.value=String(p.life);health.className='life '+(p.life>=5?'healthy':p.life>=3?'wounded':p.life>0?'critical':'depleted');health.setAttribute('aria-label','生命 '+p.life+' / 6');
-   health.replaceChildren(el('span','♥︎','heart-icon'),el('strong',p.life),el('span','/ 6','life-max'));
+   clearTimeout(health.updateTimer);
+   const updateHealth=()=>{health.dataset.value=String(p.life);health.className='life '+(p.life>=5?'healthy':p.life>=3?'wounded':p.life>0?'critical':'depleted');health.setAttribute('aria-label','生命 '+p.life+' / 6');health.replaceChildren(el('span','♥︎','heart-icon'),el('strong',p.life),el('span','/ 6','life-max'));};
+   const incoming=g.events.filter(e=>e.kind==='cast'&&e.id>last);
+   const affected=incoming.filter(e=>e.success?((e.targets||[]).includes(p.id)||(e.actor===p.id&&[2,3,8].includes(e.spell))):e.actor===p.id);
+   const delay=health.dataset.value!==undefined&&!matchMedia('(prefers-reduced-motion: reduce)').matches?Math.max(0,...affected.map(e=>e.success?1320:420)):0;
+   if(delay)health.updateTimer=setTimeout(updateHealth,delay);else updateHealth();
   }
   const hand=card.querySelector('.hand'),stones=sortedHand(p.hand),signature=g.round+':'+g.supply.join(',')+':'+stones.join(',');
   if(hand.dataset.signature!==signature){
    const pool=new Map();for(const node of hand.children){const k=Number(node.dataset.kind);if(!pool.has(k))pool.set(k,[]);pool.get(k).push(node)}
    const keep=[];
    for(const k of stones){let stone=pool.get(k)?.shift();if(stone){stone.style.animation='none'}else{stone=el('div',undefined,'stone spell-'+k);stone.dataset.kind=String(k);stone.append(img(k?arts[k-1]:'back'),el('b',k?g.supply[k-1]:'?'));}
-    const number=stone.querySelector('b'),label=String(k?g.supply[k-1]:'?');if(number.textContent!==label)number.textContent=label;keep.push(stone);
+    const number=stone.querySelector('b'),label=String(k?g.ids[k-1]:'?');if(number.textContent!==label)number.textContent=label;keep.push(stone);
    }
    const retained=new Set(keep);for(const node of [...hand.children])if(!retained.has(node))node.remove();
    keep.forEach((node,i)=>{if(hand.children[i]!==node)hand.insertBefore(node,hand.children[i]||null)});
@@ -225,3 +302,5 @@ function renderSeats(g,by){
  }
  for(const node of existing.values())node.remove();
 }
+
+$('result-toggle').onclick=()=>{const collapsed=$('round-result').classList.toggle('collapsed');$('result-toggle').textContent=collapsed?'查看结算':'收起结算';$('result-toggle').setAttribute('aria-expanded',String(!collapsed))};
