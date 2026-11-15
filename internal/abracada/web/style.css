@@ -123,3 +123,5 @@ body,button,input,a{font-variant-emoji:text}a,button,.arrow,.asterisk{font-famil
  .round-result.collapsed{width:auto;max-height:none;padding:5px;min-height:42px}
  .round-result.collapsed #result-toggle{float:none;font-size:14px;min-height:32px}
 }
+
+.player-tablets{display:inline-block;margin-left:8px;font-size:11px;font-weight:400;color:var(--gold);vertical-align:middle}

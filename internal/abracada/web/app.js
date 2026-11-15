@@ -276,7 +276,7 @@ function renderSeats(g,by){
   existing.delete(p.id);
   card.className='seat '+(s.offset===0?'self ':s.side==='opposite'?'opposite ':'')+(p.id===g.turn&&!['round-end','finished'].includes(g.phase)?'active':'');
   card.style.gridColumn=s.column;card.style.gridRow=s.row;card.style.setProperty('--x',s.x+'%');card.style.setProperty('--y',s.y+'%');
-  const heading=card.querySelector('h3'),name=p.name+(p.id===room.you?' · 你':'');if(heading.textContent!==name)heading.textContent=name;
+  const heading=card.querySelector('h3'),name=p.name+(p.id===room.you?' · 你':'');const headingKey=name+':'+p.tablets;if(heading.dataset.key!==headingKey){heading.replaceChildren(document.createTextNode(name));if(p.tablets>=1){const count=el('span','秘法石板 '+p.tablets,'player-tablets');count.setAttribute('aria-label',p.tablets+' 个秘法石板');heading.append(count)}heading.dataset.key=headingKey;}
   const health=card.querySelector('.life');
   if(health.dataset.value!==String(p.life)){
    clearTimeout(health.updateTimer);
