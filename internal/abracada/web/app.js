@@ -56,7 +56,7 @@ function showCastStage(event,game){
  $('cast-stage-art').replaceChildren(img(arts[event.spell-1]));
  $('cast-stage-result').textContent='?';stage.setAttribute('aria-label','正在施放'+names[event.spell-1]+'，等待结果');stage.dataset.player=event.actor;stage.hidden=false;positionCastCallout();
 }
-function renderNow(next){const encoded=JSON.stringify(next);if(encoded===snapshot)return;if(room?.code!==next.code||room?.game?.id!==next.game?.id||room?.game?.step!==next.game?.step){$('confirm-dialog').close();pending=null;}if(room?.code!==next.code||room?.game?.id!==next.game?.id||room?.game?.round!==next.game?.round){$('tablets-dialog').close();$('owl-dialog').close();}snapshot=encoded;room=next;$('entry').hidden=true;$('room').hidden=false;$('room-code').textContent='魔法桌 '+room.code;$('lobby').hidden=!!room.game;$('game').hidden=!room.game;$('phase-title').textContent=room.game?'出包魔法师':'等待魔法师';if(!room.game){$('lobby-count').textContent=(room.members.length+room.bots)+' / 6';const lobbyPeople=room.members.concat(Array.from({length:room.bots},(_,i)=>({id:'preview-'+i,name:['星尘学徒','苔藓术士','月光使者','迷雾巫师','琥珀法师'][i],bot:true})));$('lobby-seats').replaceChildren(...lobbyPeople.map((p,i)=>{const c=el('article',undefined,'lobby-seat');c.append(el('span',String(i+1).padStart(2,'0'),'lobby-index'),el('h3',p.name),el('span',p.bot?'机器人':p.id===room.host?'房主':'','lobby-role'));return c}));$('bots').value=room.bots;$('bots').max=6-room.members.length;$('bots').disabled=room.you!==room.host;$('start').hidden=room.you!==room.host;$('mode-note').textContent=room.members.length+room.bots===6?'六人扩展 · 45 个魔法石 · 治疗药水 11 号':'标准玩法 · 36 个魔法石';return}
+function renderNow(next){const callout=$('cast-stage');if(callout?.hidden&&callout.parentElement!==document.body)document.body.append(callout);const encoded=JSON.stringify(next);if(encoded===snapshot)return;if(room?.code!==next.code||room?.game?.id!==next.game?.id||room?.game?.step!==next.game?.step){$('confirm-dialog').close();pending=null;}if(room?.code!==next.code||room?.game?.id!==next.game?.id||room?.game?.round!==next.game?.round){$('tablets-dialog').close();$('owl-dialog').close();}snapshot=encoded;room=next;$('entry').hidden=true;$('room').hidden=false;$('room-code').textContent='魔法桌 '+room.code;$('lobby').hidden=!!room.game;$('game').hidden=!room.game;$('phase-title').textContent=room.game?'出包魔法师':'等待魔法师';if(!room.game){$('lobby-count').textContent=(room.members.length+room.bots)+' / 6';const lobbyPeople=room.members.concat(Array.from({length:room.bots},(_,i)=>({id:'preview-'+i,name:['星尘学徒','苔藓术士','月光使者','迷雾巫师','琥珀法师'][i],bot:true})));$('lobby-seats').replaceChildren(...lobbyPeople.map((p,i)=>{const c=el('article',undefined,'lobby-seat');c.append(el('span',String(i+1).padStart(2,'0'),'lobby-index'),el('h3',p.name),el('span',p.bot?'机器人':p.id===room.host?'房主':'','lobby-role'));return c}));$('bots').value=room.bots;$('bots').max=6-room.members.length;$('bots').disabled=room.you!==room.host;$('start').hidden=room.you!==room.host;$('mode-note').textContent=room.members.length+room.bots===6?'六人扩展 · 45 个魔法石 · 治疗药水 11 号':'标准玩法 · 36 个魔法石';return}
 const g=room.game,own=g.players.find(p=>p.id===room.you);const tabletKey=currentTabletKey();if(knownTabletKey!==tabletKey){knownTabletKey=tabletKey;knownTablets=[];tabletRequest=null;}if(own.tablets>knownTablets.length)loadKnownTablets().catch(()=>{});const by=id=>g.players.find(p=>p.id===id)?.name||'';if(gameID!==g.id){gameID=g.id;last=Math.max(0,...g.events.map(e=>e.id))}const ended=['round-end','finished'].includes(g.phase);$('round-label').textContent='第 '+g.round+' 轮';$('mode-label').textContent=g.players.length===6?'六人扩展':'标准玩法';$('turn-label').textContent=ended?'本轮结束':by(g.turn)+(g.turn===room.you?' · 轮到你':'');$('neighbors').textContent='你的左邻：'+by(own.left)+' · 右邻／下家：'+by(own.right);
 $('score-strip').replaceChildren(...g.players.map(p=>{const score=el('div',undefined,'score-entry'+(p.id===room.you?' is-you':''));score.append(el('span',p.name),el('strong',p.score),el('span','/ 8','score-goal'));return score}));
 renderSeats(g,by);if(!$('emoji-menu').hidden)positionEmojiMenu();
@@ -177,21 +177,10 @@ window.addEventListener('resize',positionEmojiMenu);window.addEventListener('scr
 function positionCastCallout(){
  const stage=$('cast-stage');if(stage.hidden)return;
  const seat=document.querySelector('[data-player="'+stage.dataset.player+'"]');if(!seat)return;
- const r=seat.getBoundingClientRect(),panel=stage.querySelector('.cast-stage-panel');
- const width=panel.offsetWidth,height=panel.offsetHeight;
- const center=r.left+r.width/2;
- let left=Math.max(12,Math.min(innerWidth-width-12,center-width/2));
- let top=r.top-height-12;
- stage.dataset.side='above';
- if(top<12){
-  stage.dataset.side='beside';top=Math.max(12,r.top+8);
-  if(r.right+width+16<innerWidth)left=r.right+12;
-  else if(r.left-width-16>0)left=r.left-width-12;
-  else {stage.dataset.side='above';top=Math.max(12,r.top+30)}
- }
- top=Math.min(innerHeight-height-12,Math.max(12,top));
- stage.style.left=left+'px';stage.style.top=top+'px';
- panel.style.setProperty('--tail-x',Math.max(18,Math.min(width-18,center-left))+'px');
+ const area=seat.querySelector('.seat-content')||seat;
+ if(stage.parentElement!==area)area.append(stage);
+ stage.removeAttribute('style');stage.dataset.side='overlay';
+ stage.style.setProperty('--callout-art-height',Math.max(34,Math.min(86,area.getBoundingClientRect().height-91))+'px');
 }
 window.addEventListener('resize',positionCastCallout);window.addEventListener('scroll',positionCastCallout,{passive:true});
 
@@ -206,7 +195,7 @@ function renderSeats(g,by){
   if(!card){
    card=el('article');card.dataset.player=p.id;
    const content=el('div',undefined,'seat-content');content.append(el('h3'),el('div',undefined,'life'),el('div',undefined,'hand'));card.append(content);
-   if(p.id===room.you){const button=el('button','☺','emoji-toggle');button.type='button';button.setAttribute('aria-label','发送表情');button.onclick=toggleEmojiMenu;card.append(button)}
+   if(p.id===room.you){const button=el('button','☺︎','emoji-toggle');button.type='button';button.setAttribute('aria-label','发送表情');button.onclick=toggleEmojiMenu;card.append(button)}
   }
   existing.delete(p.id);
   card.className='seat '+(s.offset===0?'self ':s.side==='opposite'?'opposite ':'')+(p.id===g.turn&&!['round-end','finished'].includes(g.phase)?'active':'');
@@ -215,7 +204,7 @@ function renderSeats(g,by){
   const health=card.querySelector('.life');
   if(health.dataset.value!==String(p.life)){
    health.dataset.value=String(p.life);health.className='life '+(p.life>=5?'healthy':p.life>=3?'wounded':p.life>0?'critical':'depleted');health.setAttribute('aria-label','生命 '+p.life+' / 6');
-   health.replaceChildren(el('span','♥','heart-icon'),el('strong',p.life),el('span','/ 6','life-max'));
+   health.replaceChildren(el('span','♥︎','heart-icon'),el('strong',p.life),el('span','/ 6','life-max'));
   }
   const hand=card.querySelector('.hand'),stones=sortedHand(p.hand),signature=g.round+':'+g.supply.join(',')+':'+stones.join(',');
   if(hand.dataset.signature!==signature){
