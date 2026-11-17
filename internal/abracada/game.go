@@ -125,11 +125,7 @@ func (g *game) beginRound(first int) {
 	for _, kind := range g.draw(remove) {
 		g.Removed[kind-1]++
 	}
-	secretCount := 4
-	if len(g.Players) == 6 {
-		secretCount = 5
-	}
-	g.Secrets = g.draw(secretCount)
+	g.Secrets = g.draw(g.Supply[3])
 	g.log(event{Kind: "round", Text: fmt.Sprintf("第 %d 轮开始，%s 先施法；按逆时针顺序行动", g.Round, g.Players[first].Member.Name)})
 }
 func (g *game) draw(n int) []int {

@@ -40,7 +40,13 @@ func (s *server) events(w http.ResponseWriter, q *http.Request) {
 		fail(w, 404, "房间不存在或已过期")
 		return
 	}
+	r.active = s.now()
 	snapshot := func() ([]byte, bool) {
+		if s.rooms[code] == r && s.now().Sub(r.active) >= roomIdleTTL {
+			delete(s.rooms, code)
+			r.notify()
+			return nil, false
+		}
 		if s.rooms[code] != r {
 			return nil, false
 		}
@@ -55,7 +61,6 @@ func (s *server) events(w http.ResponseWriter, q *http.Request) {
 		if !found {
 			return nil, false
 		}
-		r.active = s.now()
 
 		data, _ := json.Marshal(view(r, id))
 		return data, true

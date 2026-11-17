@@ -266,6 +266,9 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 		}
 		id = token(16)
 		r.players = append(r.players, player{id: id, name: in.Name})
+		if len(r.players) == 1 {
+			r.host = id
+		}
 		setCookie(w, q, r.code, id)
 		respond(w, 200, view(r, id))
 		return
@@ -361,7 +364,8 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 		}
 		r.players = append(r.players[:index], r.players[index+1:]...)
 		if len(r.players) == 0 {
-			delete(s.rooms, r.code)
+			r.host = ""
+			r.dealt = false
 		} else if r.host == id {
 			r.host = r.players[0].id
 		}

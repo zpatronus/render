@@ -47,11 +47,11 @@ func TestCapacityAndExpiry(t *testing.T) {
 		t.Fatal("idle rooms not removed")
 	}
 	rid, _, _ := create(t, s)
-	now = now.Add(roomTTL)
+	now = now.Add(2 * time.Hour)
 	s.rooms[rid].Active = now
 	s.clean()
-	if len(s.rooms) != 0 {
-		t.Fatal("hard expiration ignored")
+	if len(s.rooms) != 1 {
+		t.Fatal("active room expired because of its age")
 	}
 }
 func TestMatchFlow(t *testing.T) {
@@ -121,12 +121,13 @@ func TestMatchFlow(t *testing.T) {
 	if len(s.rooms[rid].History) != 2 {
 		t.Fatal("history")
 	}
-	before := s.rooms[rid].Active
+	requestedAt := s.rooms[rid].Active.Add(time.Second)
+	s.now = func() time.Time { return requestedAt }
 	if action("chat", "bad", map[string]any{"text": "spam"}) != 401 {
 		t.Fatal("chat auth")
 	}
-	if !before.Equal(s.rooms[rid].Active) {
-		t.Fatal("invalid action extended expiry")
+	if !requestedAt.Equal(s.rooms[rid].Active) {
+		t.Fatal("room request did not refresh activity")
 	}
 	if action("leave", host, nil) != 200 || s.rooms[rid].Host != guestID {
 		t.Fatal("host transfer")
@@ -153,7 +154,7 @@ func TestBroadcastAndExpiryClose(t *testing.T) {
 	default:
 		t.Fatal("missing broadcast")
 	}
-	s.now = func() time.Time { return r.Created.Add(roomTTL) }
+	s.now = func() time.Time { return r.Active.Add(idleTTL) }
 	s.clean()
 	if _, ok := <-ch; ok {
 		t.Fatal("stream not closed")

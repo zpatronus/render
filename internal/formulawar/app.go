@@ -20,7 +20,6 @@ import (
 var assets embed.FS
 
 const idleTTL = 15 * time.Minute
-const roomTTL = 2 * time.Hour
 const maxRooms = 100
 const obstacleCount = 15
 
@@ -78,7 +77,7 @@ func id() string {
 func (s *Server) clean() {
 	now := s.now()
 	for k, r := range s.rooms {
-		if now.Sub(r.Active) >= idleTTL || now.Sub(r.Created) >= roomTTL {
+		if now.Sub(r.Active) >= idleTTL {
 			for ch := range r.listeners {
 				close(ch)
 			}
@@ -177,6 +176,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, q *http.Request) {
 		fail(w, 404, "Room expired or does not exist")
 		return
 	}
+	r.Active = s.now()
 	if p[3] == "join" {
 		s.joinRoom(w, r, in.Name)
 		return
@@ -512,6 +512,7 @@ func (s *Server) events(w http.ResponseWriter, q *http.Request, rid string) {
 		fail(w, 429, "Too many connections")
 		return
 	}
+	r.Active = s.now()
 	ch := make(chan []byte, 8)
 	r.listeners[ch] = true
 	b, _ := json.Marshal(r)
@@ -533,6 +534,13 @@ func (s *Server) events(w http.ResponseWriter, q *http.Request, rid string) {
 			}
 			f.Flush()
 		case <-ticker.C:
+			s.mu.Lock()
+			s.clean()
+			alive := s.rooms[rid] == r
+			s.mu.Unlock()
+			if !alive {
+				return
+			}
 			if _, err := io.WriteString(w, ": keepalive\n\n"); err != nil {
 				return
 			}

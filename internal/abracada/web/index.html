@@ -38,7 +38,7 @@
   <div class="spell-rule"><div><h4>远古巨龙</h4><span>1 号</span></div><p>掷骰，其他所有玩家各失去骰子点数的生命。召唤失败时，改由你自己失去这么多生命。</p></div>
   <div class="spell-rule"><div><h4>黑暗幽灵</h4><span>2 号</span></div><p>其他所有玩家各失去 1 点生命，你恢复 1 点生命。</p></div>
   <div class="spell-rule"><div><h4>甜蜜的梦</h4><span>3 号</span></div><p>掷骰，你恢复骰子点数的生命。</p></div>
-  <div class="spell-rule"><div><h4>猫头鹰</h4><span>4 号</span></div><p>从中央尚未被取走的秘法石板中选一个，私下查看并收下。中央已经没有石板时，不再获得石板。</p></div>
+  <div class="spell-rule"><div><h4>猫头鹰</h4><span>4 号</span></div><p>从中央尚未被取走的秘法石板中选一个，私下查看并收下。每轮中央石板的起始数量与猫头鹰魔法石的总数相同：2–5 人为 4 个，六人为 5 个。</p></div>
   <div class="spell-rule"><div><h4>闪电风暴</h4><span>5 号</span></div><p>你的左邻和右邻各失去 1 点生命。两人游戏中，左右邻是同一人，因此对手只失去 1 点生命。</p></div>
   <div class="spell-rule"><div><h4>冰晶术</h4><span>6 号</span></div><p>你的左邻失去 1 点生命。</p></div>
   <div class="spell-rule"><div><h4>火球术</h4><span>7 号</span></div><p>你的右邻失去 1 点生命。</p></div>
@@ -81,4 +81,4 @@
 <dialog id="owl-dialog" class="app-dialog"><div class="dialog-heading"><h2>秘法石板</h2><button id="owl-close" class="quiet" aria-label="关闭">×</button></div><div class="owl-heading"><img src="/abracada/art/owl.svg" alt="猫头鹰"></div><div id="owl-picks" class="owl-picks"></div><div id="owl-result" class="owl-result" hidden></div><button id="owl-done" class="owl-done primary" hidden>收下</button></dialog>
 <section id="cast-stage" class="cast-stage" aria-live="polite" aria-atomic="true" hidden><div class="cast-stage-panel"><p id="cast-stage-name"></p><h2 id="cast-stage-spell"></h2><div class="cast-stage-face"><div id="cast-stage-art"></div><strong id="cast-stage-number" class="spell-number"></strong></div><div id="cast-stage-result">?</div><div id="cast-draw" hidden><canvas id="cast-draw-pad" width="640" height="380" aria-label="在这里画符掷骰"></canvas><button id="cast-draw-button" type="button">画符掷骰</button></div></div></section>
 <section id="emoji-menu" class="emoji-menu" aria-label="发送表情" hidden><div class="emoji-menu-heading"><h2>表情</h2><button id="emoji-close" class="quiet" aria-label="关闭表情菜单">×</button></div><div id="emoji-recent"></div><div id="emoji-groups"></div></section><div id="reactions" class="reactions" aria-hidden="true"></div>
-<div id="effects" class="effects" aria-hidden="true"></div><script type="module" src="/abracada/app.js"></script></body></html>
+<div id="effects" class="effects" aria-hidden="true"></div><script src="/identity.js"></script><script type="module" src="/abracada/app.js"></script></body></html>

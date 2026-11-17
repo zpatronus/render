@@ -93,7 +93,7 @@ $('start').onclick=()=>run(()=>act('start'));
 $('invite').onclick=()=>run(async()=>{const link=location.origin+base+'#'+room.code;try{await navigator.clipboard.writeText(link);$('invite').textContent='已复制';setTimeout(()=>$('invite').textContent='复制邀请',1800);}catch{notify(link);}});
 $('leave').onclick=()=>{
  const active=room.game&&room.game.phase!=='finished',request={code:room.code};
- confirmAction(active?'离开页面？席位会保留，可用原浏览器重连。':'离开房间？',null,async()=>{if(!active)await api('leave',request);location.hash='';entry();});
+ confirmAction(active?'离开页面？席位会保留，可用同一用户名和 PIN 重连。':'离开房间？',null,async()=>{if(!active)await api('leave',request);location.hash='';entry();});
 };
 $('rematch').onclick=()=>{const captured=credentials();confirmAction('返回房间，准备新一局？',null,()=>act('reset',{},captured));};
 function renderTrack(kind,total,count){

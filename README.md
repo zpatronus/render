@@ -25,7 +25,7 @@ node --test internal/*/web/*.test.mjs
 go build -trimpath -o bin/server .
 ```
 
-Node is only needed for browser-code tests. The Go binary embeds the frontend and word bank. Game artwork is cached for 24 hours with ETag validation; HTML, CSS, and JavaScript revalidate on reload, and room/private data is never cached. Rooms live in memory; run one instance. Restarting or redeploying clears them.
+Node is only needed for browser-code tests. The Go binary embeds the frontend and word bank. Game artwork is cached for 24 hours with ETag validation; HTML, CSS, and JavaScript revalidate on reload, and room/private data is never cached. Rooms live in memory; run one instance. Restarting or redeploying clears them. Players authenticate per room with a username and four-digit PIN. The frontend randomly generates and remembers the PIN, and supports changing it in the room. The backend keeps only room credentials in memory and deletes them after 15 minutes without authenticated activity; there is no permanent account registry.
 
 ## Deployment
 

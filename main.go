@@ -14,6 +14,7 @@ import (
 
 	"github.com/zpatronus/sidequests/internal/abracada"
 	"github.com/zpatronus/sidequests/internal/formulawar"
+	"github.com/zpatronus/sidequests/internal/identity"
 	"github.com/zpatronus/sidequests/internal/secrethitler"
 	"github.com/zpatronus/sidequests/internal/undercover"
 )
@@ -23,20 +24,26 @@ var web embed.FS
 
 func handler() http.Handler {
 	mux := http.NewServeMux()
+	roomAuth := identity.New()
+	mux.HandleFunc("/identity.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript")
+		data, _ := web.ReadFile("web/identity.js")
+		w.Write(data)
+	})
 	mux.HandleFunc("/abracada", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/abracada/", 301) })
-	mux.Handle("/abracada/", http.StripPrefix("/abracada", abracada.Handler()))
+	mux.Handle("/abracada/", http.StripPrefix("/abracada", roomAuth.Wrap("abracada", "abr_", abracada.Handler())))
 	mux.HandleFunc("/formula-war", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/formula-war/", http.StatusMovedPermanently)
 	})
-	mux.Handle("/formula-war/", http.StripPrefix("/formula-war", formulawar.Handler("/formula-war")))
+	mux.Handle("/formula-war/", http.StripPrefix("/formula-war", roomAuth.Wrap("formula-war", "", formulawar.Handler("/formula-war"))))
 	mux.HandleFunc("/undercover", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/undercover/", http.StatusMovedPermanently)
 	})
-	mux.Handle("/undercover/", http.StripPrefix("/undercover", undercover.Handler()))
+	mux.Handle("/undercover/", http.StripPrefix("/undercover", roomAuth.Wrap("undercover", "undercover_", undercover.Handler())))
 	mux.HandleFunc("/secret-hitler", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/secret-hitler/", http.StatusMovedPermanently)
 	})
-	mux.Handle("/secret-hitler/", http.StripPrefix("/secret-hitler", secrethitler.Handler()))
+	mux.Handle("/secret-hitler/", http.StripPrefix("/secret-hitler", roomAuth.Wrap("secret-hitler", "sh_", secrethitler.Handler())))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok\n")) })
 	files, _ := fs.Sub(web, "web")
 	static := http.FileServer(http.FS(files))

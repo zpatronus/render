@@ -59,7 +59,7 @@ func TestMountedApps(t *testing.T) {
 			t.Fatalf("missing mounted URL %s", marker)
 		}
 	}
-	_, after, _ := strings.Cut(page, `src="`)
+	_, after, _ := strings.Cut(page, `<script type="module" src="`)
 	asset, _, _ := strings.Cut(after, `"`)
 	script := get(asset)
 	if script.Code != 200 || !strings.Contains(script.Body.String(), "/formula-war/api/rooms") {
@@ -76,7 +76,7 @@ func TestMountedApps(t *testing.T) {
 			t.Fatal("unexpected route", path)
 		}
 	}
-	req := httptest.NewRequest("POST", "/formula-war/api/rooms", strings.NewReader(`{"name":"Test","player":"Ada"}`))
+	req := httptest.NewRequest("POST", "/formula-war/api/rooms", strings.NewReader(`{"name":"Test","player":"Ada","pin":"1234"}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)

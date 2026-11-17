@@ -240,6 +240,9 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 		id, token := randomID(8), randomID(24)
 		r.Members = append(r.Members, member{ID: id, Name: in.Name, Avatar: in.Avatar})
 		r.Tokens[token] = id
+		if len(r.Members) == 1 {
+			r.Host = id
+		}
 		roomCookie(w, q, r.Code, token)
 		respond(w, 200, r.view(id))
 		return
@@ -336,7 +339,8 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 			}
 		}
 		if len(r.Members) == 0 {
-			delete(s.rooms, r.Code)
+			r.Host = ""
+			r.Game = nil
 		} else if r.Host == removed {
 			r.Host = r.Members[0].ID
 		}

@@ -188,6 +188,7 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 		fail(w, 404, "房间不存在或已因 15 分钟无活动而关闭")
 		return
 	}
+	r.Active = s.now()
 	id := ""
 	if c, e := q.Cookie("abr_" + in.Code); e == nil {
 		id = r.Tokens[c.Value]
@@ -226,6 +227,9 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 		id, key := token(8), token(24)
 		r.Members = append(r.Members, member{id, in.Name, false})
 		r.Tokens[key] = id
+		if len(r.Members) == 1 {
+			r.Host = id
+		}
 		r.Bots = min(r.Bots, 6-len(r.Members))
 		r.Active = s.now()
 		r.notify()
@@ -323,7 +327,8 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 			}
 		}
 		if len(r.Members) == 0 {
-			delete(s.rooms, r.Code)
+			r.Host = ""
+			r.Game = nil
 		} else if r.Host == id {
 			r.Host = r.Members[0].ID
 		}
