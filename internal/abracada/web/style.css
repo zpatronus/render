@@ -129,3 +129,12 @@ body,button,input,a{font-variant-emoji:text}a,button,.arrow,.asterisk{font-famil
 .cast-stage-panel:has(#cast-draw:not([hidden])){width:260px;max-width:calc(100vw - 32px);max-height:none;flex-shrink:0}
 #cast-draw-pad{height:150px}
 @media(min-width:1100px){.cast-stage-panel:has(#cast-draw:not([hidden])){width:320px}#cast-draw-pad{height:190px}}
+
+/* Keep quick reactions beside the player without changing the hand layout. */
+.seat.self{padding-right:88px!important}
+.emoji-controls{position:absolute;right:0;top:50%;transform:translateY(-50%);width:80px;display:grid;grid-template-columns:repeat(2,38px);gap:4px}
+.emoji-quick{display:contents}
+.emoji-controls .emoji-choice,.emoji-controls .emoji-toggle{position:static;transform:none;width:38px;height:36px;min-height:36px;padding:0;line-height:1;font-size:24px}
+.emoji-controls .emoji-toggle{font-size:25px}
+.seat.self .hand .stone{width:min(calc((100cqw - 70px)/6),calc((100% - 20px)/5))}
+@media(min-width:1100px){.seat.self .hand .stone{width:min(calc((clamp(182px,15vw,240px) - 30px)/3),calc((100% - 20px)/5))}}

@@ -220,21 +220,26 @@ async function toggleEmojiMenu(){
  if(!$('emoji-menu').hidden){closeEmojiMenu();return}
  $('emoji-menu').hidden=false;document.querySelector('.emoji-toggle')?.setAttribute('aria-expanded','true');positionEmojiMenu();
  try{
-  if(!emojiCatalog){emojiLoading??=api('emojis');emojiCatalog=await emojiLoading;const allowed=new Set(emojiCatalog.flatMap(g=>g.emojis));recentEmoji=recentEmoji.filter(e=>allowed.has(e));drawEmojiMenu()}
-  positionEmojiMenu();
+  if(!emojiCatalog){emojiLoading??=api('emojis');emojiCatalog=await emojiLoading;const allowed=new Set(emojiCatalog.flatMap(g=>g.emojis));recentEmoji=recentEmoji.filter(e=>allowed.has(e));}
+  if($('emoji-menu').hidden)return;drawEmojiMenu();positionEmojiMenu();
  }catch(error){emojiLoading=null;message(error.message);closeEmojiMenu()}
 }
 function closeEmojiMenu(){$('emoji-menu').hidden=true;document.querySelector('.emoji-toggle')?.setAttribute('aria-expanded','false')}
-function emojiButton(emoji){const b=el('button',emoji,'emoji-choice');b.type='button';b.setAttribute('aria-label','发送 '+emoji);b.onclick=()=>sendEmoji(emoji);return b}
+function emojiButton(emoji,quick=false){const b=el('button',emoji,'emoji-choice');b.type='button';b.setAttribute('aria-label','发送 '+emoji);b.onclick=()=>sendEmoji(emoji,quick);return b}
+function drawQuickEmoji(){
+ const row=document.querySelector('.emoji-quick');if(!row)return;
+ const options=[...new Set([...recentEmoji,'😂','🤣','😭','🤡','👍'])].slice(0,5);
+ row.replaceChildren(...options.map(emoji=>emojiButton(emoji,true)));
+}
 function drawEmojiMenu(){
  const recent=$('emoji-recent');recent.replaceChildren();
- if(recentEmoji.length){recent.append(el('h3','最近'));const grid=el('div',undefined,'emoji-grid');grid.append(...recentEmoji.map(emojiButton));recent.append(grid)}
- $('emoji-groups').replaceChildren(...(emojiCatalog||[]).map(group=>{const section=el('section');section.append(el('h3',group.name));const grid=el('div',undefined,'emoji-grid');grid.append(...group.emojis.map(emojiButton));section.append(grid);return section}));
+ if(recentEmoji.length){recent.append(el('h3','最近'));const grid=el('div',undefined,'emoji-grid');grid.append(...recentEmoji.map(emoji=>emojiButton(emoji)));recent.append(grid)}
+ $('emoji-groups').replaceChildren(...(emojiCatalog||[]).map(group=>{const section=el('section');section.append(el('h3',group.name));const grid=el('div',undefined,'emoji-grid');grid.append(...group.emojis.map(emoji=>emojiButton(emoji)));section.append(grid);return section}));
 }
-async function sendEmoji(emoji){
+async function sendEmoji(emoji,quick=false){
  if(!room?.game)return;
  const activeCode=room.code;
- try{await api('react',{code:activeCode,emoji});if(room?.code!==activeCode)return;recentEmoji=[emoji,...recentEmoji.filter(e=>e!==emoji)].slice(0,10);try{localStorage.setItem('abr-emoji-recent',JSON.stringify(recentEmoji))}catch{}drawEmojiMenu();positionEmojiMenu()}catch(error){message(error.message)}
+ try{await api('react',{code:activeCode,emoji});if(room?.code!==activeCode)return;recentEmoji=[emoji,...recentEmoji.filter(e=>e!==emoji)].slice(0,10);try{localStorage.setItem('abr-emoji-recent',JSON.stringify(recentEmoji))}catch{}if(!quick)drawQuickEmoji();}catch(error){message(error.message)}
 }
 function positionEmojiMenu(){
  if($('emoji-menu').hidden)return;
@@ -255,7 +260,7 @@ function showReaction(value){
  animation.onfinish=()=>emoji.remove();
 }
 $('emoji-close').onclick=closeEmojiMenu;
-document.addEventListener('pointerdown',event=>{if(!$('emoji-menu').hidden&&!$('emoji-menu').contains(event.target)&&!event.target.closest('.emoji-toggle'))closeEmojiMenu()});
+document.addEventListener('pointerdown',event=>{if(!$('emoji-menu').hidden&&!$('emoji-menu').contains(event.target)&&!event.target.closest('.emoji-controls'))closeEmojiMenu()});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')closeEmojiMenu()});
 window.addEventListener('resize',positionEmojiMenu);window.addEventListener('scroll',positionEmojiMenu,{passive:true});
 
@@ -280,7 +285,7 @@ function renderSeats(g,by){
   if(!card){
    card=el('article');card.dataset.player=p.id;
    const content=el('div',undefined,'seat-content');content.append(el('h3'),el('div',undefined,'life'),el('div',undefined,'hand'));card.append(content);
-   if(p.id===room.you){const button=el('button','☺︎','emoji-toggle');button.type='button';button.setAttribute('aria-label','发送表情');button.onclick=toggleEmojiMenu;card.append(button)}
+   if(p.id===room.you){const controls=el('div',undefined,'emoji-controls'),quick=el('div',undefined,'emoji-quick');quick.setAttribute('aria-label','快捷表情');const button=el('button','☺︎','emoji-toggle');button.type='button';button.setAttribute('aria-label','发送表情');button.onclick=toggleEmojiMenu;controls.append(quick,button);card.append(controls);quick.append(...[...new Set([...recentEmoji,'😂','🤣','😭','🤡','👍'])].slice(0,5).map(emoji=>emojiButton(emoji,true)))}
   }
   existing.delete(p.id);
   card.className='seat '+(s.offset===0?'self ':s.side==='opposite'?'opposite ':'')+(p.id===g.turn&&!['round-end','finished'].includes(g.phase)?'active':'');
