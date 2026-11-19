@@ -136,5 +136,6 @@ body,button,input,a{font-variant-emoji:text}a,button,.arrow,.asterisk{font-famil
 .emoji-quick{display:contents}
 .emoji-controls .emoji-choice,.emoji-controls .emoji-toggle{position:static;transform:none;width:38px;height:36px;min-height:36px;padding:0;line-height:1;font-size:24px}
 .emoji-controls .emoji-toggle{font-size:25px}
+.emoji-choice,.emoji-toggle{touch-action:manipulation}
 .seat.self .hand .stone{width:min(calc((100cqw - 70px)/6),calc((100% - 20px)/5))}
 @media(min-width:1100px){.seat.self .hand .stone{width:min(calc((clamp(182px,15vw,240px) - 30px)/3),calc((100% - 20px)/5))}}
