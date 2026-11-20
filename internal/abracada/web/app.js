@@ -212,7 +212,32 @@ function shakeHit(target,color='#f68060'){
  if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
  target.animate([{translate:'0px 0px'},{translate:'-4px 0px',offset:.25},{translate:'3px 0px',offset:.55},{translate:'-1px 0px',offset:.8},{translate:'0px 0px'}],{duration:400,easing:'ease-in-out'});
 }
-function healHit(target){if(!target)return;flashHit(target,'#8fc58b');const heart=target.querySelector('.heart-icon');if(heart&&!matchMedia('(prefers-reduced-motion: reduce)').matches)heart.animate([{transform:'scale(1)'},{transform:'scale(1.28)',offset:.45},{transform:'scale(1)'}],{duration:560,easing:'ease-out'})}
+function healHit(target){
+ if(!target)return;
+ const sweep=el('div',undefined,'heal-sweep');
+ sweep.setAttribute('aria-hidden','true');
+ target.append(sweep);
+ const wash=el('div',undefined,'heal-wash');
+ sweep.append(wash);
+ wash.animate([
+  {transform:'translateY(65%)'},
+  {transform:'translateY(-100%)'},
+ ],{duration:400,easing:'linear'}).onfinish=()=>sweep.remove();
+ const rise=target.clientHeight;
+ for(let i=0;i<10;i++){
+  const mote=el('span',undefined,'heal-mote');
+  mote.style.left=(7+i*9.5)+'%';
+  sweep.append(mote);
+  const drift=(i%2===0?-1:1)*(5+i%3*3);
+  mote.animate([
+   {opacity:0,transform:'translate(0,0) scale(.55)'},
+   {opacity:.9,offset:.28},
+   {opacity:0,transform:`translate(${drift}px,${-rise*(.68+i%4*.08)}px) scale(${.65+i%3*.2})`},
+  ],{duration:320,delay:i%4*20,fill:'both',easing:'ease-out'});
+ }
+ const heart=target.querySelector('.heart-icon');
+ heart?.animate([{transform:'scale(1)'},{transform:'scale(1.28)',offset:.45},{transform:'scale(1)'}],{duration:400,easing:'ease-out'});
+}
 
 let emojiCatalog=null,emojiLoading=null,recentEmoji=[];
 try{const saved=JSON.parse(localStorage.getItem('abr-emoji-recent')||'[]');if(Array.isArray(saved))recentEmoji=[...new Set(saved.filter(x=>typeof x==='string'))].slice(0,10)}catch{}
