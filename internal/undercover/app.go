@@ -21,7 +21,10 @@ var assets embed.FS
 const roomIdleTTL = 15 * time.Minute
 
 type pair struct{ a, b string }
-type player struct{ id, name, word string }
+type player struct {
+	id, name, word, role string
+	eliminated           bool
+}
 type room struct {
 	listeners            map[chan struct{}]struct{}
 	code, host           string
@@ -30,6 +33,7 @@ type room struct {
 	dealt                bool
 	active               time.Time
 	lastPair             int
+	voting               votingState
 }
 type server struct {
 	mu    sync.Mutex
@@ -123,6 +127,7 @@ type memberView struct {
 	Name string `json:"name"`
 	Host bool   `json:"host"`
 	You  bool   `json:"you"`
+	Role string `json:"role,omitempty"`
 }
 type roomView struct {
 	Code    string       `json:"code"`
@@ -132,13 +137,19 @@ type roomView struct {
 	Round   int          `json:"round"`
 	Dealt   bool         `json:"dealt"`
 	Host    bool         `json:"host"`
+	Vote    voteView     `json:"vote"`
 }
 
 func view(r *room, id string) roomView {
 	v := roomView{Code: r.code, Spies: r.spies, Blanks: r.blanks, Round: r.round, Dealt: r.dealt, Host: r.host == id}
 	for _, p := range r.players {
-		v.Players = append(v.Players, memberView{Name: p.name, Host: r.host == p.id, You: p.id == id})
+		member := memberView{Name: p.name, Host: r.host == p.id, You: p.id == id}
+		if p.eliminated {
+			member.Role = p.role
+		}
+		v.Players = append(v.Players, member)
 	}
+	v.Vote = r.voteView(id)
 	return v
 }
 func setCookie(w http.ResponseWriter, r *http.Request, code, id string) {
@@ -188,6 +199,8 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 		Spies  int    `json:"spies"`
 		Blanks int    `json:"blanks"`
 		Round  int    `json:"round"`
+		Ballot int    `json:"ballot"`
+		Target string `json:"target"`
 	}
 	if q.Method == "POST" {
 		if err := json.NewDecoder(http.MaxBytesReader(w, q.Body, 2048)).Decode(&in); err != nil {
@@ -297,7 +310,7 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 			return
 		}
 		if in.Spies < 1 || in.Spies > 9 || in.Blanks < 0 || in.Blanks > 9 || in.Spies+in.Blanks >= len(r.players) || len(r.players) < 3 {
-			fail(w, 400, "至少 3 人，至少 1 名卧底，并保留至少 1 名平民")
+			fail(w, 400, "至少 3 人，至少 1 名卧底，并保留至少 1 名普通人")
 			return
 		}
 		r.spies, r.blanks = in.Spies, in.Blanks
@@ -310,25 +323,52 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 		if random(2) == 1 {
 			a, b = b, a
 		}
-		words := make([]string, len(r.players))
-		for i := range words {
-			words[i] = a
-			if i < r.spies {
-				words[i] = b
-			}
-			if i >= r.spies && i < r.spies+r.blanks {
-				words[i] = ""
+		type card struct{ word, role string }
+		cards := make([]card, len(r.players))
+		for i := range cards {
+			switch {
+			case i < r.spies:
+				cards[i] = card{b, "卧底"}
+			case i < r.spies+r.blanks:
+				cards[i] = card{"", "白板"}
+			default:
+				cards[i] = card{a, "普通人"}
 			}
 		}
-		for i := len(words) - 1; i > 0; i-- {
+		for i := len(cards) - 1; i > 0; i-- {
 			j := random(i + 1)
-			words[i], words[j] = words[j], words[i]
+			cards[i], cards[j] = cards[j], cards[i]
 		}
 		for i := range r.players {
-			r.players[i].word = words[i]
+			r.players[i].word, r.players[i].role = cards[i].word, cards[i].role
+			r.players[i].eliminated = false
 		}
 		r.round++
 		r.dealt = true
+		r.voting = votingState{}
+	case "/api/start-vote", "/api/vote":
+		if q.Method != "POST" {
+			fail(w, 405, "请使用 POST")
+			return
+		}
+		if !r.dealt || in.Round != r.round || in.Ballot != r.voting.number {
+			fail(w, 409, "投票状态已更新，请重试")
+			return
+		}
+		if q.URL.Path == "/api/start-vote" {
+			if id != r.host {
+				fail(w, 403, "只有房主可以开始投票")
+				return
+			}
+			if !r.canStartVote() {
+				fail(w, 409, "现在无法开始新的投票")
+				return
+			}
+			r.voting = votingState{number: r.voting.number + 1, ballots: make(map[string]string)}
+		} else if status, message := r.castVote(index, in.Target); status != 0 {
+			fail(w, status, message)
+			return
+		}
 	case "/api/word":
 		if q.Method != "POST" {
 			fail(w, 405, "请使用 POST")
@@ -354,18 +394,26 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 			return
 		}
 		r.dealt = false
+		r.voting = votingState{}
 		for i := range r.players {
 			r.players[i].word = ""
+			r.players[i].role = ""
+			r.players[i].eliminated = false
 		}
 	case "/api/leave":
 		if q.Method != "POST" {
 			fail(w, 405, "请使用 POST")
 			return
 		}
+		if r.voting.ballots != nil && !r.players[index].eliminated {
+			r.voting.ballots = nil
+			r.voting.result = &voteResult{Kind: "cancelled"}
+		}
 		r.players = append(r.players[:index], r.players[index+1:]...)
 		if len(r.players) == 0 {
 			r.host = ""
 			r.dealt = false
+			r.voting = votingState{}
 		} else if r.host == id {
 			r.host = r.players[0].id
 		}

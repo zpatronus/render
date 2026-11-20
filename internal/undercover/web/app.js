@@ -1,6 +1,6 @@
 'use strict';
 const $=id=>document.getElementById(id);
-let room=null,busy=false,loading=false,revision=0;
+let room=null,busy=false,loading=false,revision=0,rosterKey='';
 const message=text=>{ $('message').textContent=text;$('message').hidden=!text; };
 const hideWord=()=>{$('secret').hidden=true;$('word').textContent='';$('covered').hidden=false;$('reveal').setAttribute('aria-pressed','false');};
 async function api(path,data){
@@ -14,15 +14,82 @@ function render(next){
  room=next;connectStream();$('lobby').hidden=true;$('room').hidden=false;
  $('room-code').textContent=room.code;$('round').textContent=room.dealt?'第 '+room.round+' 局 · 已发词':'等待玩家';
  $('player-count').textContent=room.players.length;
- $('players').replaceChildren(...room.players.map(p=>{
-  const li=document.createElement('li'),name=document.createElement('span'),badge=document.createElement('span');
-  name.className='name';name.textContent=p.name;badge.className='badge';badge.textContent=[p.you?'你':'',p.host?'房主':''].filter(Boolean).join(' · ');li.append(name,badge);return li;
- }));
+ renderVoting();
  $('deal').hidden=!room.host||room.dealt;$('waiting').hidden=room.host||room.dealt;$('card').hidden=!room.dealt;$('reset').hidden=!room.host||!room.dealt;
  if(configChanged){$('room-spies').value=room.spies;$('room-blanks').value=room.blanks;}
  civilianCount();
 }
-function civilianCount(){if(room)$('civilian-count').textContent='平民 '+Math.max(0,room.players.length-Number($('room-spies').value)-Number($('room-blanks').value))+' 人';}
+
+function ballotKey() {
+ return JSON.stringify([room.code,room.round,room.vote?.number]);
+}
+
+function renderVoting() {
+ const vote=room.vote;
+ const me=room.players.find(p=>p.you);
+ const canVote=Boolean(vote?.open && me && !me.role && !vote.choice);
+ if(voteConfirmation && (!canVote || voteConfirmation!==ballotKey())){
+  pendingConfirmation=null;
+  voteConfirmation=null;
+  $('confirm-dialog').close();
+ }
+ $('start-vote').hidden=!vote?.canStart;
+ let status='';
+ if(vote?.open){
+  status=`投票中 · ${vote.cast} / ${vote.eligible} 人已投`;
+  if(me?.role)status+=' · 你已出局';
+  else if(vote.choice)status+=` · 已投给 ${vote.choice}`;
+  else status+=' · 请选择一位玩家';
+ }else if(vote?.result){
+  const result=vote.result;
+  if(result.kind==='eliminated')status=`${result.name} 出局 · ${result.role}`;
+  else if(result.kind==='tie')status='最高票数并列，本次无人出局。';
+  else if(result.kind==='cancelled')status='有玩家离开，本次投票已取消。';
+ }
+ const summary=$('vote-status');
+ if(summary.textContent!==status)summary.textContent=status;
+ summary.hidden=!status;
+
+ const nextKey=JSON.stringify([room.code,room.round,vote?.number,canVote,room.players]);
+ if(rosterKey===nextKey)return;
+ rosterKey=nextKey;
+ $('players').replaceChildren(...room.players.map(p=>{
+  const li=document.createElement('li');
+  const name=document.createElement('span');
+  name.className='name';
+  name.textContent=p.name;
+  const badge=document.createElement('span');
+  badge.className='badge';
+  badge.textContent=[p.you?'你':'',p.host?'房主':'',p.role?`出局 · ${p.role}`:''].filter(Boolean).join(' · ');
+  if(p.role)li.className='eliminated';
+  li.append(name,badge);
+  if(canVote && !p.you && !p.role){
+   const button=document.createElement('button');
+   button.type='button';
+   button.className='vote-choice';
+   button.textContent='投票';
+   button.setAttribute('aria-label','投票给 '+p.name);
+   button.onclick=()=>confirmVote(p.name);
+   li.append(button);
+  }
+  return li;
+ }));
+}
+
+function confirmVote(target) {
+ const request={code:room.code,round:room.round,ballot:room.vote.number,target};
+ askConfirmation(`投票给「${target}」？`,async()=>render(await api('vote',request)),{
+  note:'确认后，本次投票无法更改。',
+  label:'确认投票',
+  ballot:ballotKey(),
+ });
+}
+
+$('start-vote').onclick=()=>action(async()=>{
+ if(!room?.vote?.canStart)return;
+ render(await api('start-vote',{code:room.code,round:room.round,ballot:room.vote.number}));
+});
+function civilianCount(){if(room)$('civilian-count').textContent='普通人 '+Math.max(0,room.players.length-Number($('room-spies').value)-Number($('room-blanks').value))+' 人';}
 $('room-spies').oninput=civilianCount;$('room-blanks').oninput=civilianCount;
 async function action(task){
  if(busy)return;busy=true;revision++;message('');
@@ -42,14 +109,25 @@ $('reveal').onclick=()=>{
  $('word').textContent=result.blank?'白板':result.word;$('covered').hidden=true;$('secret').hidden=false;$('reveal').setAttribute('aria-pressed','true');
 });
 };
-let pendingConfirmation=null;
-function askConfirmation(title,task){
- hideWord();pendingConfirmation=task;$('confirm-title').textContent=title;$('confirm-dialog').showModal();
+let pendingConfirmation=null,voteConfirmation=null;
+function askConfirmation(title,task,{note='',label='确认',ballot=null}={}){
+ hideWord();
+ pendingConfirmation=task;
+ voteConfirmation=ballot;
+ $('confirm-title').textContent=title;
+ $('confirm-note').textContent=note;
+ $('confirm-note').hidden=!note;
+ $('confirm-accept').textContent=label;
+ $('confirm-dialog').showModal();
 }
-$('confirm-dialog').onclose=()=>{pendingConfirmation=null;};
-$('confirm-cancel').onclick=()=>{$('confirm-dialog').close();pendingConfirmation=null;};
+function clearConfirmation(){
+ pendingConfirmation=null;
+ voteConfirmation=null;
+}
+$('confirm-dialog').onclose=()=>{if(!$('confirm-dialog').open)clearConfirmation();};
+$('confirm-cancel').onclick=()=>{clearConfirmation();$('confirm-dialog').close();};
 $('confirm-accept').onclick=()=>{
- const task=pendingConfirmation;pendingConfirmation=null;$('confirm-dialog').close();
+ const task=pendingConfirmation;clearConfirmation();$('confirm-dialog').close();
  if(task)return action(task);
 };
 $('reset').onclick=()=>{
