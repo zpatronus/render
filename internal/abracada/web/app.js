@@ -188,7 +188,60 @@ async function focusSeatForCast(){
  });
 }
 
-function renderCountBoard(g){const visible=Array(8).fill(0),privateCounts=Array(8).fill(0);if(knownTabletKey===currentTabletKey())for(const k of knownTablets)privateCounts[k-1]++;for(const player of g.players){if(player.id===room.you)continue;for(const kind of player.hand)if(kind)visible[kind-1]++}$('count-board').replaceChildren(...names.map((n,i)=>{const row=el('div',undefined,'count-row spell-'+(i+1));const label=el('div',undefined,'count-label');label.append(el('b',g.ids[i],'spell-number'),img(arts[i]),el('span',n),el('strong',(g.used[i]+g.removed[i]+visible[i]+privateCounts[i])+' / '+g.supply[i]));const slots=el('div',undefined,'count-slots');for(let j=0;j<g.supply[i];j++){const used=j<g.used[i]+g.removed[i],seen=!used&&j<g.used[i]+g.removed[i]+visible[i],mine=!used&&!seen&&j<g.used[i]+g.removed[i]+visible[i]+privateCounts[i];const slot=el('span',g.ids[i],'count-slot '+(used?'used':seen?'visible':mine?'known-tablet':'unknown'));slot.title=used?'已公开':seen?'对手手中可见':mine?'我的秘法石板':'未知';slot.setAttribute('aria-label',g.ids[i]+'号：'+slot.title);slots.append(slot)}row.append(label,slots);row.title='已公开 '+(g.used[i]+g.removed[i])+' · 可见 '+visible[i]+' · 我的石板 '+privateCounts[i]+' · 未知 '+(g.supply[i]-g.used[i]-g.removed[i]-visible[i]-privateCounts[i]);return row}));}
+const countSlotLabels={
+ used:'已公开',
+ visible:'对手手中可见',
+ 'known-tablet':'我的秘法石板',
+ unknown:'未知',
+};
+
+function renderCountBoard(g){
+ const visible=Array(8).fill(0),privateCounts=Array(8).fill(0);
+ if(knownTabletKey===currentTabletKey()){
+  for(const kind of knownTablets)privateCounts[kind-1]++;
+ }
+ for(const player of g.players){
+  if(player.id===room.you)continue;
+  for(const kind of player.hand)if(kind)visible[kind-1]++;
+ }
+
+ const board=$('count-board');
+ for(const [i,name] of names.entries()){
+  let row=board.children[i];
+  const id=String(g.ids[i]),supply=g.supply[i];
+  if(!row){
+   row=el('div',undefined,'count-row spell-'+(i+1));
+   const label=el('div',undefined,'count-label');
+   label.append(el('b',id,'spell-number'),img(arts[i]),el('span',name),el('strong'));
+   row.append(label,el('div',undefined,'count-slots'));
+   board.append(row);
+  }
+  const used=g.used[i]+g.removed[i];
+  const seen=used+visible[i];
+  const known=seen+privateCounts[i];
+  const label=row.querySelector('.count-label strong');
+  const total=known+' / '+supply;
+  if(label.textContent!==total)label.textContent=total;
+  const title='已公开 '+used+' · 可见 '+visible[i]+' · 我的石板 '+privateCounts[i]+' · 未知 '+(supply-known);
+  if(row.title!==title)row.title=title;
+
+  const slots=row.querySelector('.count-slots');
+  while(slots.children.length>supply)slots.lastElementChild.remove();
+  for(let j=0;j<supply;j++){
+   let slot=slots.children[j];
+   if(!slot){
+    slot=el('span',id);
+    slots.append(slot);
+   }
+   const state=j<used?'used':j<seen?'visible':j<known?'known-tablet':'unknown';
+   const className='count-slot '+state;
+   if(slot.className===className)continue;
+   slot.className=className;
+   slot.title=countSlotLabels[state];
+   slot.setAttribute('aria-label',id+'号：'+slot.title);
+  }
+ }
+}
 
 function currentTabletKey(){return room?.game?room.code+':'+room.game.id+':'+room.game.round+':'+room.you:'';}
 function loadKnownTablets(){
