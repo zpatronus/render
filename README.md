@@ -4,7 +4,7 @@ Small games and tools in one Go service, deployable anywhere that runs Go.
 
 - `/` — project home
 - `/formula-war/` — Formula War
-- `/undercover/` — 谁是卧底: join a room, configure undercover/blank counts, and privately view cards. Discussion and voting happen offline. Rooms expire after 15 minutes without a room request.
+- `/undercover/` — 谁是卧底: join a room, configure undercover/blank counts, and privately view cards. The host can start elimination votes. A confirmed vote is final, and an eliminated player’s role is revealed while their word stays private. Rooms expire after 15 minutes without a room request.
 - `/abracada/` — 出包魔法师，中文在线魔法推理桌游，2–5 人标准玩法、六人扩展，自绘 SVG、SSE、可添加机器人。
 - `/secret-hitler/` — 揭秘希特勒，1–10 人中文在线桌游，可添加机器人补足规则所需的 5–10 席
 
