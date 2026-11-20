@@ -145,13 +145,13 @@ function animateCast(e){
  if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
  const source=document.querySelector('[data-player="'+e.actor+'"]');if(!source)return;
  const a=source.getBoundingClientRect();
- if(!e.success){shakeHit(source,'#f68060');return}
+ if(!e.success){damageHit(source,'backfire',e.roll||1);return}
  const hits=new Map(),damage='#f68060',heal='#8fc58b',owl='#e7d59e';
  if(e.spell===2){for(const id of e.targets||[])hits.set(id,damage);hits.set(e.actor,heal)}
  else if(e.spell===3||e.spell===8)hits.set(e.actor,heal);
  else if(e.spell===4)hits.set(e.actor,owl);
  else for(const id of e.targets||[])hits.set(id,damage);
- for(const [id,color] of hits){const target=document.querySelector('[data-player="'+id+'"]');if(!target)continue;const b=target.getBoundingClientRect();const effect=img(arts[e.spell-1]);Object.assign(effect.style,{position:'fixed',width:'72px',height:'74px',left:(a.x+a.width/2-36)+'px',top:(a.y+a.height/2-37)+'px',filter:'drop-shadow(0 0 18px '+color+')'});$('effects').append(effect);const motion=effect.animate([{opacity:0,transform:'scale(.3) rotate(-25deg)'},{opacity:1,offset:.2,transform:'scale(1.2)'},{opacity:0,transform:'translate('+(b.x+b.width/2-a.x-a.width/2)+'px,'+(b.y+b.height/2-a.y-a.height/2)+'px) scale(.7) rotate(20deg)'}],{duration:900,easing:'ease-in-out'});motion.onfinish=()=>{effect.remove();const recipient=document.querySelector('[data-player="'+id+'"]');if(color===heal)healHit(recipient);else if(color===owl)flashHit(recipient,color);else shakeHit(recipient,color)}}
+ for(const [id,color] of hits){const target=document.querySelector('[data-player="'+id+'"]');if(!target)continue;const b=target.getBoundingClientRect();const effect=img(arts[e.spell-1]);Object.assign(effect.style,{position:'fixed',width:'72px',height:'74px',left:(a.x+a.width/2-36)+'px',top:(a.y+a.height/2-37)+'px',filter:'drop-shadow(0 0 18px '+color+')'});$('effects').append(effect);const motion=effect.animate([{opacity:0,transform:'scale(.3) rotate(-25deg)'},{opacity:1,offset:.2,transform:'scale(1.2)'},{opacity:0,transform:'translate('+(b.x+b.width/2-a.x-a.width/2)+'px,'+(b.y+b.height/2-a.y-a.height/2)+'px) scale(.7) rotate(20deg)'}],{duration:900,easing:'ease-in-out'});motion.onfinish=()=>{effect.remove();const recipient=document.querySelector('[data-player="'+id+'"]');if(color===heal)healHit(recipient,e.spell===3?e.roll:1);else if(color===owl)flashHit(recipient,color);else damageHit(recipient,e.spell,e.roll||1)}}
 }
 
 function openOwl(){
@@ -212,7 +212,46 @@ function shakeHit(target,color='#f68060'){
  if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
  target.animate([{translate:'0px 0px'},{translate:'-4px 0px',offset:.25},{translate:'3px 0px',offset:.55},{translate:'-1px 0px',offset:.8},{translate:'0px 0px'}],{duration:400,easing:'ease-in-out'});
 }
-function healHit(target){
+const damageParticles={
+ 1:{shape:'ember',color:'#ffad55',count:12,duration:620,trajectory:(t,k)=>[t*.98-.49,-.12-Math.sin(t*Math.PI)*.34,k*.3-.15,.24]},
+ 2:{shape:'wisp',color:'#c5ace8',count:9,duration:740,trajectory:(t,k)=>[Math.cos(t*6.28)*.42,-.2-k*.24,Math.sin(t*6.28)*.28,.24+k*.1]},
+ 5:{shape:'bolt',color:'#b2baff',count:8,duration:460,trajectory:(t,k)=>[Math.round(t*4)/5-.4,.44,t*.8-.4,-.48]},
+ 6:{shape:'shard',color:'#aff5ff',count:10,duration:600,trajectory:(t,k)=>[Math.cos(t*6.28)*(.3+k*.18),Math.sin(t*6.28)*(.3+k*.18),0,0]},
+ 7:{shape:'flame',color:'#ff7945',count:10,duration:660,trajectory:(t,k)=>[(t-.5)*.72,-.26-k*.22,(t-.5)*.35,.18]},
+ backfire:{shape:'spark',color:'#ff5757',count:14,duration:550,trajectory:(t,k)=>[(t-.5)*.96,.23+k*.21,(t-.5)*.3,-.08]},
+};
+function damageHit(target,spell,amount){
+ if(!target)return;
+ shakeHit(target);
+ const style=damageParticles[spell];
+ if(!style)return;
+ const burst=el('div',undefined,'damage-particles '+style.shape+'-burst');
+ burst.setAttribute('aria-hidden','true');
+ burst.style.setProperty('--particle-color',style.color);
+ target.append(burst);
+ const width=target.clientWidth,height=target.clientHeight;
+ const count=style.count+4*(amount**2-1);
+ const particles=Array.from({length:count},(_,i)=>{
+  const particle=el('span',undefined,'damage-particle '+style.shape);
+  burst.append(particle);
+  const [x,y,startX,startY]=style.trajectory(i/count,(i%7)/6);
+  const angle=Math.atan2((y-startY)*height,(x-startX)*width)*180/Math.PI+90;
+  const frame=(progress,scale,spin)=>{
+   const dx=(startX+(x-startX)*progress)*width;
+   const dy=(startY+(y-startY)*progress)*height;
+   return `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) rotate(${angle+spin}deg) scale(${scale})`;
+  };
+  const sharp=spell===5||spell===6;
+  return particle.animate([
+   {opacity:0,transform:frame(0,.4,0)},
+   {opacity:1,offset:.18,transform:frame(sharp?.45:.19,1.1,0)},
+   {opacity:.72,offset:.56,transform:frame(.77,.94,spell===6?75:8)},
+   {opacity:0,transform:frame(1,spell===2?1.65:.38,spell===6?155:20)},
+  ],{duration:style.duration,delay:(i%7)*(sharp?10:19),fill:'both',easing:sharp?'ease-out':'ease-in-out'}).finished;
+ });
+ Promise.allSettled(particles).then(()=>burst.remove());
+}
+function healHit(target,amount){
  if(!target)return;
  const sweep=el('div',undefined,'heal-sweep');
  sweep.setAttribute('aria-hidden','true');
@@ -222,19 +261,23 @@ function healHit(target){
  wash.animate([
   {transform:'translateY(65%)'},
   {transform:'translateY(-100%)'},
- ],{duration:400,easing:'linear'}).onfinish=()=>sweep.remove();
+ ],{duration:400,easing:'linear',fill:'forwards'});
  const rise=target.clientHeight;
- for(let i=0;i<10;i++){
-  const mote=el('span',undefined,'heal-mote');
-  mote.style.left=(7+i*9.5)+'%';
-  sweep.append(mote);
-  const drift=(i%2===0?-1:1)*(5+i%3*3);
-  mote.animate([
-   {opacity:0,transform:'translate(0,0) scale(.55)'},
-   {opacity:.9,offset:.28},
-   {opacity:0,transform:`translate(${drift}px,${-rise*(.68+i%4*.08)}px) scale(${.65+i%3*.2})`},
-  ],{duration:320,delay:i%4*20,fill:'both',easing:'ease-out'});
- }
+ const count=3*amount**2;
+ const columns=Math.ceil(Math.sqrt(count*2));
+ const particles=Array.from({length:count},(_,i)=>{
+  const plus=el('span','+','heal-plus');
+  plus.style.left=(6+(i%columns+.5)*84/columns)+'%';
+  plus.style.bottom=(12+Math.floor(i/columns)*14+i%3*3)+'%';
+  sweep.append(plus);
+  return plus.animate([
+   {opacity:0,transform:'translateY(0) scale(.7)'},
+   {opacity:.95,offset:.24},
+   {opacity:.8,offset:.68},
+   {opacity:0,transform:`translateY(${-rise*.26}px) scale(1)`},
+  ],{duration:850,delay:230+(i%columns)*14+Math.floor(i/columns)*42,fill:'both',easing:'ease-out'}).finished;
+ });
+ Promise.allSettled(particles).then(()=>sweep.remove());
  const heart=target.querySelector('.heart-icon');
  heart?.animate([{transform:'scale(1)'},{transform:'scale(1.28)',offset:.45},{transform:'scale(1)'}],{duration:400,easing:'ease-out'});
 }

@@ -86,9 +86,9 @@ body,button,input,a{font-variant-emoji:text}a,button,.arrow,.asterisk{font-famil
  position:absolute;inset:0 0 auto;height:145%;
  background:linear-gradient(to bottom,transparent,#a6e99a45 34%,#c8f5b665 62%,transparent);
 }
-.heal-mote{
- position:absolute;bottom:4%;width:5px;height:5px;border-radius:50%;
- background:#deffd3;box-shadow:0 0 8px #a6e99acc;
+.heal-plus{
+ position:absolute;color:#deffd3;font:bold 21px/1 Arial,sans-serif;
+ text-shadow:0 0 8px #a6e99acc;
 }
 .stone{animation-duration:.8s}
 .score-entry:not(:first-child){border-left:1px solid var(--edge);padding-left:14px}
@@ -150,3 +150,20 @@ body,button,input,a{font-variant-emoji:text}a,button,.arrow,.asterisk{font-famil
 .emoji-choice,.emoji-toggle{touch-action:manipulation}
 .seat.self .hand .stone{width:min(calc((100cqw - 70px)/6),calc((100% - 20px)/5))}
 @media(min-width:1100px){.seat.self .hand .stone{width:min(calc((clamp(182px,15vw,240px) - 30px)/3),calc((100% - 20px)/5))}}
+
+.damage-particles{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:7}
+.damage-particle{position:absolute;left:50%;top:50%;width:10px;height:10px;background:var(--particle-color)}
+.damage-particle.ember{border-radius:50%;box-shadow:0 0 10px #ff824d}
+.damage-particle.wisp{width:16px;height:20px;border-radius:50% 50% 45% 10%;background:radial-gradient(ellipse at 55% 32%,#f5eaff,var(--particle-color) 32%,transparent 75%)}
+.damage-particle.bolt{width:11px;height:22px;clip-path:polygon(50% 0,100% 0,65% 39%,100% 39%,14% 100%,42% 52%,0 52%)}
+.damage-particle.shard{width:9px;height:20px;clip-path:polygon(60% 0,100% 46%,30% 100%,0 48%)}
+.damage-particle.flame{width:11px;height:18px;border-radius:75% 15% 55% 45%;background:linear-gradient(#ffe186,var(--particle-color) 75%)}
+.damage-particle.spark{width:19px;height:19px;background:radial-gradient(circle,#fff4da 12%,#ffab88 38%,var(--particle-color) 75%);clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%)}
+
+.damage-particles::before{content:'';position:absolute;inset:0;opacity:0;pointer-events:none}
+.ember-burst::before,.flame-burst::before{background:radial-gradient(ellipse at 50% 95%,#ffbd665e,transparent 70%);animation:damage-halo .48s ease-out}
+.wisp-burst::before{background:radial-gradient(ellipse at 50% 40%,#9f71d957,transparent 69%);animation:damage-halo .64s ease-out}
+.shard-burst::before{background:conic-gradient(from 18deg,transparent 0 14%,#a9f4ff63 15% 16%,transparent 17% 39%,#a9f4ff55 40% 41%,transparent 42% 68%,#a9f4ff63 69% 70%,transparent 71%);animation:damage-halo .38s ease-out}
+.bolt-burst::before{background:linear-gradient(112deg,transparent 46%,#b2baff75 49%,#eef0ffd9 50%,#b2baff75 51%,transparent 54%);animation:damage-halo .24s ease-out}
+.spark-burst::before{background:radial-gradient(ellipse,#ff8e6760,transparent 60%);animation:damage-halo .32s ease-out}
+@keyframes damage-halo{0%{opacity:0;transform:scale(.6)}22%{opacity:1}100%{opacity:0;transform:scale(1.12)}}
