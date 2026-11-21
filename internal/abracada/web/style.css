@@ -167,3 +167,10 @@ body,button,input,a{font-variant-emoji:text}a,button,.arrow,.asterisk{font-famil
 .bolt-burst::before{background:linear-gradient(112deg,transparent 46%,#b2baff75 49%,#eef0ffd9 50%,#b2baff75 51%,transparent 54%);animation:damage-halo .24s ease-out}
 .spark-burst::before{background:radial-gradient(ellipse,#ff8e6760,transparent 60%);animation:damage-halo .32s ease-out}
 @keyframes damage-halo{0%{opacity:0;transform:scale(.6)}22%{opacity:1}100%{opacity:0;transform:scale(1.12)}}
+
+.request-loading{width:max-content;margin:auto auto max(20px,env(safe-area-inset-bottom));padding:10px 16px}
+.request-loading::backdrop{background:#0002;backdrop-filter:none}
+.request-loading>div{display:flex;align-items:center;gap:10px;font-size:14px}
+.request-spinner{width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:request-spin .7s linear infinite}
+@keyframes request-spin{to{transform:rotate(360deg)}}
+#reload-detail{line-height:1.65;color:var(--muted)}

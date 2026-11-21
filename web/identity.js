@@ -21,6 +21,14 @@
   return response;
  };
  window.EventSource=class extends NativeEvents{constructor(input,options){const url=new URL(input,location.href);if(url.origin===location.origin&&url.pathname.startsWith(base+'/api/')&&pair){url.searchParams.set('username',pair.name);url.searchParams.set('pin',pair.pin)}super(url.href,options)}};
+ async function updatePIN(code,name,newPin){
+  const data={code,username:name,pin:pair.pin,newPin};
+  if(base==='/abracada'&&window.abracadaUpdatePIN)return window.abracadaUpdatePIN(data,nativeFetch);
+  const response=await nativeFetch(base+'/api/pin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  const result=await response.json();
+  if(!response.ok)throw Error(result.error);
+  return result;
+ }
  function changeCurrentPIN(){
   if(!pair||!lastRoom)return;
   let dialog=document.getElementById('room-pin-dialog');
@@ -32,7 +40,7 @@
     event.preventDefault();const newPin=dialog.querySelector('input').value,error=dialog.querySelector('.pin-error'),button=dialog.querySelector('[type=submit]');
     if(!/^\d{4}$/.test(newPin)){error.textContent='请输入 4 位数字';return}
     button.disabled=true;
-    try{const response=await nativeFetch(base+'/api/pin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:lastRoom,username:pair.name,pin:pair.pin,newPin})});const result=await response.json();if(!response.ok)throw Error(result.error);remember({...pair,pin:newPin});for(const field of document.querySelectorAll('.room-pin'))field.value=newPin;dialog.close()}catch(problem){error.textContent=problem.message}finally{button.disabled=false}
+    try{await updatePIN(lastRoom,pair.name,newPin);remember({...pair,pin:newPin});for(const field of document.querySelectorAll('.room-pin'))field.value=newPin;dialog.close()}catch(problem){error.textContent=problem.message}finally{button.disabled=false}
    };
    document.body.append(dialog);
   }
@@ -46,7 +54,7 @@
   const status=document.createElement('span');status.setAttribute('role','status');status.style.cssText='display:block;font-size:12px;margin-top:4px';
   change.onclick=async()=>{const name=field.value.trim(),newPin=pin.value;if(!/^\d{4}$/.test(newPin)){status.textContent='请输入 4 位数字';return}
    const code=lastRoom||location.hash.slice(1);if(!pair||pair.name!==name||!code){remember({name,pin:newPin});status.textContent='已记住，下次加入房间时使用';return}
-   try{const response=await nativeFetch(base+'/api/pin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,username:name,pin:pair.pin,newPin})});const result=await response.json();if(!response.ok)throw Error(result.error);remember({name,pin:newPin,room:code});for(const input of document.querySelectorAll('.room-pin'))input.value=newPin;status.textContent='本房间 PIN 已修改'}catch(error){status.textContent=error.message}
+   try{await updatePIN(code,name,newPin);remember({name,pin:newPin,room:code});for(const input of document.querySelectorAll('.room-pin'))input.value=newPin;status.textContent='本房间 PIN 已修改'}catch(error){status.textContent=error.message}
   };
   label.append(pin,change,status);field.insertAdjacentElement('afterend',label);
  }const actions=document.getElementById('leave')?.parentElement;if(actions){const button=document.createElement('button');button.type='button';button.className='quiet';button.textContent='修改 PIN';button.onclick=changeCurrentPIN;actions.append(button)}}

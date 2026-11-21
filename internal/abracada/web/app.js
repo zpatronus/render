@@ -2,18 +2,119 @@ import {seats,sortedHand} from './layout.mjs';
 const $=id=>document.getElementById(id),names=['远古巨龙','黑暗幽灵','甜蜜的梦','猫头鹰','闪电风暴','冰晶术','火球术','治疗药水'],arts=['dragon','ghost','dream','owl','storm','ice','fire','potion'],effects=['其他所有人失去骰子点数生命','其他人失去1生命，自己恢复1','恢复骰子点数生命','拿取一个秘法石板','左右邻各失去1生命','左邻失去1生命','右邻失去1生命','恢复1生命'];let room,stream,busy=false,last=0,gameID='',pending,snapshot='',owlKey='',knownTablets=[],knownTabletKey='',tabletRequest=null;
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e},img=a=>{const e=el('img');e.src='/abracada/art/'+a+'.svg';e.alt='';return e},code=()=>location.hash.slice(1).toUpperCase();
 function message(s=''){$('message').textContent=s;$('message').hidden=!s}
-async function api(action,data){const r=await fetch('/abracada/api/'+action,data?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}:{cache:'no-store'});const v=await r.json();if(!r.ok)throw Error(v.error);return v}
-function connect(){
- stream?.close();if(!room||document.hidden)return;
- const activeCode=room.code,source=new EventSource('/abracada/api/events?code='+activeCode);stream=source;
- const current=()=>source===stream&&room?.code===activeCode;
- source.onmessage=e=>{if(!current())return;if(!busy)render(JSON.parse(e.data));$('connection').textContent='● 实时连接'};
- source.addEventListener('reaction',event=>{if(current())showReaction(JSON.parse(event.data))});
- source.onerror=()=>{if(current())$('connection').textContent='正在重新连接…'};
- source.addEventListener('expired',()=>{if(!current())return;source.close();room=null;snapshot='';$('entry').hidden=false;$('room').hidden=true;message('房间已过期或已关闭')});
+const requestTimeout=10_000;
+let requestInFlight=false, disconnectTimer, resumeInFlight=false;
+const reloadDialog=$('reload-dialog');
+const loadingDialog=$('request-loading');
+
+function askReload(title,detail){
+ if(reloadDialog.open)return;
+ $('reload-title').textContent=title;
+ $('reload-detail').textContent=detail;
+ reloadDialog.showModal();
 }
-async function act(action,extra={}){if(busy||presentationActive)return;busy=true;const request={code:room.code,game:room.game?.id,step:room.game?.step,...extra};try{if(action==='cast')await focusSeatForCast();const result=await api(action,request);if(action!=='leave')await render(result);message()}catch(e){message(e.message)}finally{busy=false;if(action!=='leave')connect()}}
-function confirm(title,fn,label='确认施法',effect=''){$('confirm-body').textContent=effect;$('confirm-title').textContent=title;$('confirm-accept').textContent=label;pending=fn;$('confirm-dialog').showModal()}
+for(const dialog of [reloadDialog,loadingDialog]){
+ dialog.addEventListener('cancel',event=>event.preventDefault());
+}
+$('reload-page').onclick=()=>location.reload();
+
+async function withRequestFeedback(task){
+ if(requestInFlight||reloadDialog.open)throw Error('请等待当前操作完成');
+ requestInFlight=true;
+ loadingDialog.showModal();
+ try{return await task();}
+ finally{loadingDialog.close();requestInFlight=false;}
+}
+
+async function api(action,data,{background=false,fetcher=fetch,before}={}){
+ const request=async()=>{
+  const controller=new AbortController();
+  let timer;
+  const timeout=new Promise((_,reject)=>{
+   timer=setTimeout(()=>{
+    reject(Error('请求超时'));
+    controller.abort();
+    askReload('请求超时','服务器 10 秒内未响应。请重新加载页面，确认刚才的操作是否已生效。');
+   },requestTimeout);
+  });
+  try{
+   const fetchResult=async()=>{
+    if(before)await before();
+    controller.signal.throwIfAborted();
+    const options=data?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}:{cache:'no-store'};
+    const response=await fetcher('/abracada/api/'+action,{...options,signal:controller.signal});
+    const result=await response.json();
+    if(!response.ok)throw Error(result.error||'请求失败');
+    return result;
+   };
+   return await Promise.race([fetchResult(),timeout]);
+  }finally{clearTimeout(timer);}
+ };
+ return background?request():withRequestFeedback(request);
+}
+
+// PIN changes use the same feedback, with credentials supplied by the room login form.
+window.abracadaUpdatePIN=(data,fetcher)=>api('pin',data,{fetcher});
+
+function clearDisconnectTimer(){
+ clearTimeout(disconnectTimer);
+ disconnectTimer=undefined;
+}
+function watchDisconnect(){
+ if(disconnectTimer!==undefined||!room||document.hidden)return;
+ $('connection').textContent='正在重新连接…';
+ disconnectTimer=setTimeout(()=>{
+  disconnectTimer=undefined;
+  if(room&&!document.hidden)askReload('实时连接已断开','实时连接已断开 10 秒，请重新加载页面后继续游戏。');
+ },requestTimeout);
+}
+function stopConnection(){
+ stream?.close();
+ stream=null;
+ clearDisconnectTimer();
+}
+function connect(){
+ if(!room||document.hidden){stopConnection();return;}
+ stream?.close();
+ const activeCode=room.code,source=new EventSource('/abracada/api/events?code='+activeCode);
+ stream=source;
+ const current=()=>source===stream&&room?.code===activeCode;
+ const connected=()=>{
+  if(!current())return;
+  clearDisconnectTimer();
+  $('connection').textContent='● 实时连接';
+ };
+ watchDisconnect();
+ source.onopen=connected;
+ source.onmessage=e=>{if(!current())return;connected();if(!busy)render(JSON.parse(e.data));};
+ source.addEventListener('reaction',event=>{if(current())showReaction(JSON.parse(event.data))});
+ source.onerror=()=>{if(current())watchDisconnect();};
+ source.addEventListener('expired',()=>{
+  if(!current())return;
+  stopConnection();
+  room=null;snapshot='';
+  $('entry').hidden=false;$('room').hidden=true;
+  message('房间已过期或已关闭');
+ });
+}
+async function act(action,extra={}){
+ if(!room||busy||presentationActive||requestInFlight||reloadDialog.open)return false;
+ busy=true;
+ const request={code:room.code,game:room.game?.id,step:room.game?.step,...extra};
+ let succeeded=false;
+ try{
+  const result=await api(action,request,{before:action==='cast'?focusSeatForCast:undefined});
+  if(action!=='leave')await render(result);
+  message();
+  succeeded=true;
+  return true;
+ }catch(error){message(error.message);return false;}
+ finally{
+  busy=false;
+  if(action!=='leave'||!succeeded)connect();
+ }
+}
+function confirm(title,fn,label='确认施法',effect=''){if(requestInFlight||reloadDialog.open)return;$('confirm-body').textContent=effect;$('confirm-title').textContent=title;$('confirm-accept').textContent=label;pending=fn;$('confirm-dialog').showModal()}
 $('confirm-accept').onclick=()=>{const f=pending;$('confirm-dialog').close();f?.()};for(const id of ['confirm-close','confirm-cancel'])$(id).onclick=()=>$('confirm-dialog').close();for(const kind of ['rules','tablets']){$(kind+'-close').onclick=()=>$(kind+'-dialog').close()}$('rules-open').onclick=()=>$('rules-dialog').showModal();
 try{$('name').value=localStorage.getItem('abr-name')||'';}catch{}
 $('entry-form').onsubmit=async e=>{e.preventDefault();try{const nickname=$('name').value.trim();const next=await api(e.submitter?.dataset.entry||'create',{name:nickname,code:$('code').value.trim()});try{localStorage.setItem('abr-name',nickname);}catch{}location.hash=next.code;render(next);connect()}catch(e){message(e.message)}};
@@ -110,15 +211,64 @@ function waitForRoll(event,epoch){
  return new Promise(resolve=>{rollWaiter={eventID:event.id,resolve};const check=()=>{if(epoch!==presentationEpoch){rollWaiter=null;resolve(null);return}setTimeout(check,250)};check()});
 }
 function renderNow(next){const callout=$('cast-stage');if(callout?.hidden&&callout.parentElement!==document.body)document.body.append(callout);const encoded=JSON.stringify(next);if(encoded===snapshot)return;if(room?.code!==next.code||room?.game?.id!==next.game?.id||room?.game?.step!==next.game?.step){$('confirm-dialog').close();pending=null;}if(room?.code!==next.code||room?.game?.id!==next.game?.id||room?.game?.round!==next.game?.round){$('tablets-dialog').close();$('owl-dialog').close();}snapshot=encoded;room=next;$('entry').hidden=true;$('room').hidden=false;$('room-code').textContent='魔法桌 '+room.code;$('lobby').hidden=!!room.game;$('game').hidden=!room.game;$('phase-title').textContent=room.game?'出包魔法师':'等待魔法师';if(!room.game){$('lobby-count').textContent=(room.members.length+room.bots)+' / 6';const lobbyPeople=room.members.concat(Array.from({length:room.bots},(_,i)=>({id:'preview-'+i,name:['星尘学徒','苔藓术士','月光使者','迷雾巫师','琥珀法师'][i],bot:true})));$('lobby-seats').replaceChildren(...lobbyPeople.map((p,i)=>{const c=el('article',undefined,'lobby-seat');c.append(el('span',String(i+1).padStart(2,'0'),'lobby-index'),el('h3',p.name),el('span',p.bot?'机器人':p.id===room.host?'房主':'','lobby-role'));return c}));$('bots').replaceChildren(...Array.from({length:6},(_,count)=>{const button=el('button',String(count));button.type='button';button.disabled=room.you!==room.host||count>6-room.members.length;button.setAttribute('aria-pressed',String(count===room.bots));button.onclick=()=>act('bots',{count});return button}));$('start').hidden=room.you!==room.host;$('mode-note').textContent=room.members.length+room.bots===6?'六人扩展 · 43 个魔法石 · 5 个秘法石板':'标准玩法 · 36 个魔法石';return}
-const g=room.game,own=g.players.find(p=>p.id===room.you);const tabletKey=currentTabletKey();if(knownTabletKey!==tabletKey){knownTabletKey=tabletKey;knownTablets=[];tabletRequest=null;}if(own.tablets>knownTablets.length)loadKnownTablets().catch(()=>{});const by=id=>g.players.find(p=>p.id===id)?.name||'';if(gameID!==g.id){gameID=g.id;last=Math.max(0,...g.events.map(e=>e.id))}const ended=['round-end','finished'].includes(g.phase);$('round-label').textContent='第 '+g.round+' 轮';$('mode-label').textContent=g.players.length===6?'六人扩展':'标准玩法';$('turn-label').textContent=ended?'本轮结束':by(g.turn)+(g.turn===room.you?' · 轮到你':'');$('neighbors').textContent='你的左邻：'+by(own.left)+' · 右邻／下家：'+by(own.right);
+const g=room.game,own=g.players.find(p=>p.id===room.you);const tabletKey=currentTabletKey();if(knownTabletKey!==tabletKey){knownTabletKey=tabletKey;knownTablets=[];tabletRequest=null;}if(own.tablets>knownTablets.length)loadKnownTablets({background:true}).catch(()=>{});const by=id=>g.players.find(p=>p.id===id)?.name||'';if(gameID!==g.id){gameID=g.id;last=Math.max(0,...g.events.map(e=>e.id))}const ended=['round-end','finished'].includes(g.phase);$('round-label').textContent='第 '+g.round+' 轮';$('mode-label').textContent=g.players.length===6?'六人扩展':'标准玩法';$('turn-label').textContent=ended?'本轮结束':by(g.turn)+(g.turn===room.you?' · 轮到你':'');$('neighbors').textContent='你的左邻：'+by(own.left)+' · 右邻／下家：'+by(own.right);
 $('score-strip').replaceChildren(...g.players.map(p=>{const score=el('div',undefined,'score-entry'+(p.id===room.you?' is-you':''));score.append(el('span',p.name),el('strong',p.score),el('span','/ 8','score-goal'));return score}));
 renderSeats(g,by);if(!$('emoji-menu').hidden)positionEmojiMenu();
  $('action-panel').hidden=ended||g.turn!==room.you||g.phase==='rolling';$('action-title').textContent=g.turn===room.you?'选择你的法术':'等待 '+by(g.turn);$('action-help').textContent=g.canEnd?'可以继续施法，编号不能降低，也可以收手补牌。':'每回合至少尝试一次施法。';$('end-turn').disabled=g.turn!==room.you||!g.canEnd||g.phase!=='playing';$('spell-buttons').hidden=g.phase==='owl';$('spell-buttons').replaceChildren(...names.map((n,i)=>{const b=el('button',undefined,'spell-'+(i+1));b.append(el('b',g.ids[i],'spell-number'),img(arts[i]),el('strong',n));b.title=effects[i];b.disabled=g.turn!==room.you||i+1<g.minimum||g.phase!=='playing';b.onclick=()=>confirm('施放 '+g.ids[i]+' 号'+n+'？',()=>act('cast',{spell:i+1}),'确认施法',effects[i]+(i===0?'；失败时自己失去骰子点数生命':'；失败时自己失去 1 点生命'));return b}));$('secret-choice').hidden=g.phase!=='owl'||g.turn!==room.you;$('secret-slots').replaceChildren(...g.secrets.map((available,i)=>{const b=el('button','石板 '+(i+1));b.disabled=!available||g.turn!==room.you;b.onclick=()=>openOwl();return b}));
  $('deck-count').textContent='抽牌堆 '+g.deck;renderCountBoard(g);if(g.phase==='owl'&&g.turn===room.you&&owlKey!==g.id+':'+g.step){owlKey=g.id+':'+g.step;queueMicrotask(openOwl);}
 $('secret-count').textContent='中央剩余 '+g.secrets.filter(Boolean).length+' 个 · 你持有 '+own.tablets+' 个';$('round-result').hidden=!ended;$('result-title').textContent=g.phase==='finished'?'全场赢家：'+g.winners.map(by).join('、'):'本轮结束';$('round-result').querySelector('.eyebrow').textContent=g.phase==='finished'?'游戏结束':'本轮结算';$('result-reason').textContent=g.phase==='finished'?'最后一轮：'+g.reason:g.reason;const resultKey=g.id+':'+g.round+':'+g.phase;if(ended&&$('round-result').dataset.resultKey!==resultKey){$('round-result').dataset.resultKey=resultKey;$('round-result').classList.remove('collapsed');$('result-toggle').textContent='收起结算';$('result-toggle').setAttribute('aria-expanded','true');}$('scoreboard').replaceChildren(...g.players.map(p=>el('div',p.name+' · 本轮 +'+p.gain+' · 累计 '+p.score+' 分')));$('next-round').textContent=g.phase==='finished'?'重新开局':'下一轮';$('next-round').hidden=room.you!==room.host;$('next-wait').textContent=room.you===room.host?'':'等待房主继续';$('history').replaceChildren(...g.events.slice().reverse().map(e=>el('li','第 '+e.round+' 轮 · '+e.text)));
 for(const e of g.events){if(e.id<=last)continue;last=e.id;if(e.kind==='cast')animateCast(e)}}
-$('start').onclick=()=>act('start');$('end-turn').onclick=()=>confirm('结束回合并补牌？',()=>act('end'),'结束回合');$('next-round').onclick=()=>act(room.game.phase==='finished'?'reset':'next');$('invite').onclick=async()=>{try{await navigator.clipboard.writeText(location.href);message('邀请链接已复制')}catch{message(location.href)}};$('leave').onclick=()=>confirm('离开魔法桌？游戏中保留席位。',async()=>{stream?.close();if(!room.game||room.game.phase==='finished')await act('leave');room=null;location.hash='';$('entry').hidden=false;$('room').hidden=true});$('tablets-open').onclick=async()=>{try{const v=await loadKnownTablets();$('my-tablets').replaceChildren(...v.tablets.map(k=>{const c=el('div',undefined,'spell-'+k);c.append(el('b',room.game.ids[k-1],'spell-number'),img(arts[k-1]),el('p',names[k-1]));return c}));$('tablets-dialog').showModal()}catch(e){message(e.message)}};
-async function resume(){if(!/^[A-F0-9]{6}$/.test(code()))return;try{const next=await api('room?code='+code());await render(next);connect();if(next.game?.phase==='rolling')resumePendingRoll(next)}catch(e){message(e.message)}}window.addEventListener('hashchange',resume);document.addEventListener('visibilitychange',()=>{if(document.hidden){stream?.close();$('tablets-dialog').close();$('owl-dialog').close()}else resume()});window.addEventListener('pagehide',()=>stream?.close());window.addEventListener('pageshow',resume);$('code').value=code();resume();
+$('start').onclick=()=>act('start');
+$('end-turn').onclick=()=>confirm('结束回合并补牌？',()=>act('end'),'结束回合');
+$('next-round').onclick=()=>act(room.game.phase==='finished'?'reset':'next');
+$('invite').onclick=async()=>{
+ try{await navigator.clipboard.writeText(location.href);message('邀请链接已复制');}
+ catch{message(location.href);}
+};
+$('leave').onclick=()=>confirm('离开魔法桌？游戏中保留席位。',async()=>{
+ if((!room.game||room.game.phase==='finished')&&!await act('leave'))return;
+ stopConnection();
+ room=null;
+ location.hash='';
+ $('entry').hidden=false;$('room').hidden=true;
+});
+$('tablets-open').onclick=async()=>{
+ try{
+  const v=await loadKnownTablets();
+  $('my-tablets').replaceChildren(...v.tablets.map(k=>{
+   const c=el('div',undefined,'spell-'+k);
+   c.append(el('b',room.game.supply[k-1],'spell-number'),img(arts[k-1]),el('p',names[k-1]));
+   return c;
+  }));
+  $('tablets-dialog').showModal();
+ }catch(error){message(error.message);}
+};
+async function resume(){
+ const roomCode=code();
+ if(document.hidden||reloadDialog.open||!(/^[A-F0-9]{6}$/).test(roomCode))return;
+ if(room?.code===roomCode&&!stream)connect();
+ if(resumeInFlight||busy||requestInFlight)return;
+ resumeInFlight=true;
+ try{
+  const next=await api('room?code='+roomCode);
+  if(code()!==roomCode)return;
+  const rendered=render(next);
+  if(!stream||room?.code!==roomCode){await rendered;connect();}
+  else await rendered;
+  if(next.game?.phase==='rolling')resumePendingRoll(next);
+ }catch(error){message(error.message);}
+ finally{resumeInFlight=false;}
+}
+window.addEventListener('hashchange',resume);
+window.addEventListener('offline',watchDisconnect);
+document.addEventListener('visibilitychange',()=>{
+ if(document.hidden){stopConnection();$('tablets-dialog').close();$('owl-dialog').close();}
+ else resume();
+});
+window.addEventListener('pagehide',stopConnection);
+window.addEventListener('pageshow',resume);
+$('code').value=code();
+resume();
 
 async function resumePendingRoll(state){
  const event=state.game.events.find(e=>e.kind==='cast'&&e.actor===state.game.turn&&!e.roll);if(!event)return;
@@ -162,7 +312,7 @@ function openOwl(){
 }
 async function chooseTablet(slot){
  if(busy)return;const id=room.game.id,round=room.game.round;
- await act('take',{slot});
+ if(!await act('take',{slot}))return;
  if(room?.game?.id!==id||room.game.round!==round||room.game.phase==='owl')return;
  $('owl-picks').hidden=true;
  try{const result=await loadKnownTablets();if(result.game!==id||result.round!==round)return;const k=result.tablets.at(-1);if(!k)return;const face=img(arts[k-1]),text=el('div',undefined,'spell-'+k);text.append(el('b',room.game.ids[k-1],'spell-number'),el('h3',names[k-1]));$('owl-result').replaceChildren(face,text);$('owl-result').hidden=false;$('owl-done').hidden=false;if(!matchMedia('(prefers-reduced-motion: reduce)').matches)face.animate([{opacity:0,transform:'rotateY(85deg) scale(.7)'},{opacity:1,transform:'rotateY(0) scale(1)'}],{duration:650,easing:'ease-out'});}catch(e){message(e.message);$('owl-dialog').close()}
@@ -244,11 +394,14 @@ function renderCountBoard(g){
 }
 
 function currentTabletKey(){return room?.game?room.code+':'+room.game.id+':'+room.game.round+':'+room.you:'';}
-function loadKnownTablets(){
+function loadKnownTablets({background=false}={}){
  const key=currentTabletKey();if(!key)return Promise.reject(Error('游戏尚未开始'));
- if(tabletRequest?.key===key)return tabletRequest.promise;
+ if(tabletRequest?.key===key){
+  const {promise}=tabletRequest;
+  return background?promise:withRequestFeedback(()=>promise);
+ }
  const code=room.code;
- const promise=api('tablets?code='+code).then(result=>{
+ const promise=api('tablets?code='+code,undefined,{background}).then(result=>{
   if(currentTabletKey()!==key||result.game!==room.game.id||result.round!==room.game.round)throw Error('本轮已结束，请重新查看');
   knownTabletKey=key;knownTablets=[...result.tablets];renderCountBoard(room.game);return result;
  }).finally(()=>{if(tabletRequest?.key===key)tabletRequest=null;});
