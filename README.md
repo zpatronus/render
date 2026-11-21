@@ -10,10 +10,10 @@ Small games and tools in one Go service, deployable anywhere that runs Go.
 
 ## Local development
 
-Requires Go 1.23+. No external Go dependencies or frontend build tools.
+Requires Go 1.23+ and a C compiler for the bundled SQLite driver. No frontend build tools are required.
 
 ```sh
-go run .
+SIDEQUESTS_DATA_DIR=./data go run .
 ```
 
 Open http://localhost:8080. Set `PORT` to change the port.
@@ -25,7 +25,11 @@ node --test internal/*/web/*.test.mjs
 go build -trimpath -o bin/server .
 ```
 
-Node is only needed for browser-code tests. The Go binary embeds the frontend and word bank. Game artwork is cached for 24 hours with ETag validation; HTML, CSS, and JavaScript revalidate on reload, and room/private data is never cached. Rooms live in memory; run one instance. Restarting or redeploying clears them. Players authenticate per room with a username and four-digit PIN. The frontend randomly generates and remembers the PIN, and supports changing it in the room. The backend keeps only room credentials in memory and deletes them after 15 minutes without authenticated activity; there is no permanent account registry.
+Node is only needed for browser-code tests. The Go binary embeds the frontend and word bank. Game artwork is cached for 24 hours with ETag validation; HTML, CSS, and JavaScript revalidate on reload, and room/private data is never cached. Players authenticate per room with a username and four-digit PIN. There is no permanent account registry.
+
+出包魔法师 and 揭秘希特勒 save their rooms, game state, and PIN credentials in `/data/sidequests.sqlite3` by default. The server creates the database on startup and restores active games after a restart. Run one process per database. Live connections and emoji reactions stay in memory. A dedicated cleanup loop runs every 15 minutes, and rooms stop accepting requests 15 minutes after their last activity. Formula War and 谁是卧底 keep their rooms in memory.
+
+Set `SIDEQUESTS_DATA_DIR` to choose another directory, or `SIDEQUESTS_STORAGE=memory` to skip SQLite entirely. If the storage path is unavailable at startup, the server logs the failure and uses in-memory rooms. A database already owned by another process is rejected.
 
 ## Deployment
 
@@ -35,7 +39,8 @@ Build with `go build -trimpath -o bin/server .` and run `./bin/server`. The serv
 
 Use `render.yaml`, or configure a Go web service with:
 
-- Build: `go build -trimpath -o bin/server .`
+- Build: `CGO_ENABLED=1 go build -trimpath -o bin/server .`
+- Storage: `SIDEQUESTS_STORAGE=memory`
 - Start: `./bin/server`
 - Health check: `/healthz`
 - Root directory: leave empty
@@ -47,6 +52,10 @@ gh secret set RENDER_DEPLOY_HOOK_URL --repo zpatronus/sidequests
 ```
 
 Change `DEPLOY_VERSION`, commit, and push to `main`. The workflow runs tests and a build, then requests deployment of that exact commit. Check rollout status in Render.
+
+### Deplexo
+
+Mount persistent storage at `/data` and build with `CGO_ENABLED=1` and a C compiler. Leave `SIDEQUESTS_STORAGE` unset to use SQLite.
 
 ## Adding an app
 

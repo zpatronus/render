@@ -193,7 +193,7 @@ func (s *server) advanceRoomBots(r *room) {
 		for {
 			s.mu.Lock()
 			g := r.Game
-			if s.rooms[r.Code] != r || g == nil || !botsPending(g) {
+			if s.rooms[r.Code] != r || (s.done != nil && !s.now().Before(roomExpiry(r))) || g == nil || !botsPending(g) {
 				r.botsRunning = false
 				s.mu.Unlock()
 				return
@@ -207,15 +207,18 @@ func (s *server) advanceRoomBots(r *room) {
 				}
 			}
 			s.mu.Unlock()
-			time.Sleep(delay)
+			if !s.waitBot(delay) {
+				return
+			}
 			s.mu.Lock()
-			if s.rooms[r.Code] != r || r.Game != g || g.Step != step {
+			if s.rooms[r.Code] != r || (s.done != nil && !s.now().Before(roomExpiry(r))) || r.Game != g || g.Step != step {
 				s.mu.Unlock()
 				continue
 			}
+			before := s.beforeBot(r)
 			id, move, ok := nextBotMove(g)
 			if ok {
-				if err := g.act(id, move.Action, move.Target, move.Card, move.Yes); err == nil {
+				if err := g.act(id, move.Action, move.Target, move.Card, move.Yes); err == nil && s.saveBot(r, before) {
 					r.notify()
 				}
 			}

@@ -36,8 +36,8 @@ type event struct {
 	Text    string   `json:"text"`
 }
 type pendingCast struct {
-	actor, kind, position, eventIndex int
-	success                           bool
+	Actor, Kind, Position, EventIndex int
+	Success                           bool
 }
 type game struct {
 	ID                                      string
@@ -51,6 +51,13 @@ type game struct {
 	Winners                                 []string
 	Pending                                 *pendingCast
 	roll                                    func() int
+}
+
+func (g *game) rollDie() int {
+	if g.roll != nil {
+		return g.roll()
+	}
+	return random(3) + 1
 }
 
 func random(n int) int {
@@ -154,7 +161,7 @@ func (g *game) endTurn() {
 }
 
 func (g *game) actRoll(id string, value int) error {
-	if g.Phase != "rolling" || g.Pending == nil || g.Players[g.Pending.actor].Member.ID != id {
+	if g.Phase != "rolling" || g.Pending == nil || g.Players[g.Pending.Actor].Member.ID != id {
 		return errors.New("当前没有等待你的掷骰")
 	}
 	if value < 1 || value > 3 {
@@ -163,9 +170,9 @@ func (g *game) actRoll(id string, value int) error {
 	pending := *g.Pending
 	g.Pending = nil
 	g.Phase = "playing"
-	e := &g.Events[pending.eventIndex]
+	e := &g.Events[pending.EventIndex]
 	e.Roll = value
-	g.resolveCast(pending.actor, pending.kind, pending.position, pending.success, e)
+	g.resolveCast(pending.Actor, pending.Kind, pending.Position, pending.Success, e)
 	g.Step++
 	return nil
 }
@@ -177,7 +184,7 @@ func (g *game) resolveCast(actor, kind, position int, success bool, e *event) {
 		loss := 1
 		if kind == 1 {
 			if e.Roll == 0 {
-				e.Roll = g.roll()
+				e.Roll = g.rollDie()
 			}
 			loss = e.Roll
 		}
@@ -195,7 +202,7 @@ func (g *game) resolveCast(actor, kind, position int, success bool, e *event) {
 	switch kind {
 	case 1:
 		if e.Roll == 0 {
-			e.Roll = g.roll()
+			e.Roll = g.rollDie()
 		}
 		for i := range g.Players {
 			if i != actor {
@@ -211,7 +218,7 @@ func (g *game) resolveCast(actor, kind, position int, success bool, e *event) {
 		p.Life = min(6, p.Life+1)
 	case 3:
 		if e.Roll == 0 {
-			e.Roll = g.roll()
+			e.Roll = g.rollDie()
 		}
 		p.Life = min(6, p.Life+e.Roll)
 	case 4:
@@ -370,13 +377,13 @@ func (g *game) actWithRoll(id, action string, kind, slot, roll int, human bool) 
 		g.Phase = "rolling"
 		e.Text = fmt.Sprintf("%s 正在施放 %d 号%s", p.Member.Name, g.IDs[kind-1], spellNames[kind-1])
 		g.log(e)
-		g.Pending = &pendingCast{actor: g.Turn, kind: kind, position: position, eventIndex: len(g.Events) - 1, success: position >= 0}
+		g.Pending = &pendingCast{Actor: g.Turn, Kind: kind, Position: position, EventIndex: len(g.Events) - 1, Success: position >= 0}
 		return nil
 	}
 	if needsRoll {
 		e.Roll = roll
 		if e.Roll == 0 {
-			e.Roll = g.roll()
+			e.Roll = g.rollDie()
 		}
 	}
 	g.log(e)

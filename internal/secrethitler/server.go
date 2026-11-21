@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"embed"
+
 	"encoding/hex"
 	"encoding/json"
 	"io/fs"
@@ -15,6 +16,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/zpatronus/sidequests/internal/roomdb"
 )
 
 //go:embed web/index.html web/style.css web/app.js web/art/* LICENSE
@@ -24,19 +27,24 @@ const roomIdleTTL = 15 * time.Minute
 const imageCacheTTL = 24 * time.Hour
 
 type room struct {
-	botsRunning bool
-	listeners   map[chan struct{}]struct{}
-	Code, Host  string
-	Members     []member
-	Tokens      map[string]string
-	Bots        int
-	Game        *game
-	Active      time.Time
+	Pins          roomdb.Pins
+	activityDirty bool
+	botsRunning   bool
+	listeners     map[chan struct{}]struct{}
+	Code, Host    string
+	Members       []member
+	Tokens        map[string]string
+	Bots          int
+	Game          *game
+	Active        time.Time
 }
 type server struct {
-	mu    sync.Mutex
-	rooms map[string]*room
-	now   func() time.Time
+	pinAuth bool
+	storage *roomdb.Store
+	done    <-chan struct{}
+	mu      sync.Mutex
+	rooms   map[string]*room
+	now     func() time.Time
 }
 
 func Handler() http.Handler { return (&server{rooms: map[string]*room{}, now: time.Now}).handler() }
@@ -121,15 +129,18 @@ func roomCookie(w http.ResponseWriter, r *http.Request, code, token string) {
 }
 
 type request struct {
-	Code   string `json:"code"`
-	Name   string `json:"name"`
-	Avatar int    `json:"avatar"`
-	Target string `json:"target"`
-	Game   string `json:"game"`
-	Step   int    `json:"step"`
-	Count  *int   `json:"count"`
-	Card   *int   `json:"card"`
-	Yes    *bool  `json:"yes"`
+	Username string `json:"username"`
+	PIN      string `json:"pin"`
+	NewPIN   string `json:"newPin"`
+	Code     string `json:"code"`
+	Name     string `json:"name"`
+	Avatar   int    `json:"avatar"`
+	Target   string `json:"target"`
+	Game     string `json:"game"`
+	Step     int    `json:"step"`
+	Count    *int   `json:"count"`
+	Card     *int   `json:"card"`
+	Yes      *bool  `json:"yes"`
 }
 
 func (s *server) api(w http.ResponseWriter, q *http.Request) {
@@ -162,16 +173,73 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 		}
 	} else {
 		in.Code = q.URL.Query().Get("code")
+		in.Username = q.URL.Query().Get("username")
+		in.PIN = q.URL.Query().Get("pin")
 	}
 	in.Code = strings.ToUpper(strings.TrimSpace(in.Code))
 	in.Name = strings.TrimSpace(in.Name)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
-	for code, r := range s.rooms {
-		if now.Sub(r.Active) >= roomIdleTTL {
-			delete(s.rooms, code)
-			r.notify()
+	if s.done == nil {
+		for code, r := range s.rooms {
+			if now.Sub(r.Active) >= roomIdleTTL {
+				delete(s.rooms, code)
+				r.notify()
+			}
+		}
+	}
+	var credential string
+	if s.pinAuth {
+		if q.URL.Path == "/api/create" {
+			in.Code = ""
+		}
+		name := strings.TrimSpace(in.Username)
+		if name == "" {
+			name = in.Name
+		}
+		if !roomdb.ValidLogin(name, in.PIN) {
+			fail(w, 403, "请填写用户名和 4 位 PIN")
+			return
+		}
+		entry := q.URL.Path == "/api/create" || q.URL.Path == "/api/join"
+		if entry && !strings.EqualFold(name, in.Name) {
+			fail(w, 400, "用户名与昵称不一致")
+			return
+		}
+		if r := s.rooms[in.Code]; r != nil && !s.now().Before(roomExpiry(r)) {
+			fail(w, 404, "房间不存在或已过期")
+			return
+		}
+		if s.storage != nil && q.URL.Path != "/api/react" {
+			recorded, commit := roomdb.Record(w, s.storage, storageGame, &in.Code, s.rooms, roomExpiry, restoreRoom, fail)
+			w = recorded
+			defer commit()
+		}
+		if r := s.rooms[in.Code]; r != nil && s.now().Before(roomExpiry(r)) && q.URL.Path != "/api/create" {
+			r.Active = s.now()
+			if s.storage != nil && q.URL.Path == "/api/react" {
+				r.activityDirty = true
+			}
+			var status int
+			credential, status = r.Pins.Authenticate(in.Code, name, in.PIN, s.now())
+			if status != 0 {
+				fail(w, status, roomdb.LoginError(status))
+				return
+			}
+			if q.URL.Path == "/api/pin" && q.Method == "POST" {
+				if r.Tokens[credential] == "" {
+					fail(w, 403, "请先加入房间")
+					return
+				}
+				if !roomdb.ValidLogin(name, in.NewPIN) {
+					fail(w, 400, "新 PIN 必须是 4 位数字")
+					return
+				}
+				r.Pins.Set(in.Code, name, in.NewPIN, credential)
+				respond(w, 200, map[string]bool{"changed": true})
+				return
+			}
 		}
 	}
 	if q.URL.Path == "/api/create" && q.Method == "POST" {
@@ -179,7 +247,7 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 			fail(w, 400, "请填写昵称并选择头像")
 			return
 		}
-		if len(s.rooms) >= 100 {
+		if s.activeRooms(s.now()) >= 100 {
 			fail(w, 503, "房间已满，请稍后重试")
 			return
 		}
@@ -190,12 +258,18 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 		id, token := randomID(8), randomID(24)
 		r := &room{Code: code, Host: id, Members: []member{{ID: id, Name: in.Name, Avatar: in.Avatar, Bot: false}}, Tokens: map[string]string{token: id}, Bots: -1, Active: now}
 		s.rooms[code] = r
-		roomCookie(w, q, code, token)
+		if s.pinAuth {
+			in.Code = code
+			r.Pins.Set(code, in.Name, in.PIN, token)
+		}
+		if !s.pinAuth {
+			roomCookie(w, q, code, token)
+		}
 		respond(w, 201, r.view(id))
 		return
 	}
 	r := s.rooms[in.Code]
-	if r == nil {
+	if r == nil || !s.now().Before(roomExpiry(r)) {
 		fail(w, 404, "房间不存在或已过期")
 		return
 	}
@@ -204,7 +278,9 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 		defer r.notify()
 	}
 	id := ""
-	if c, err := q.Cookie("sh_" + r.Code); err == nil {
+	if s.pinAuth {
+		id = r.Tokens[credential]
+	} else if c, err := q.Cookie("sh_" + r.Code); err == nil {
 		id = r.Tokens[c.Value]
 	}
 	index := -1
@@ -220,7 +296,7 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 			return
 		}
 		if r.Game != nil {
-			fail(w, 409, "本局已开始，请等待下一局；已有玩家可用原浏览器重连")
+			fail(w, 409, "本局已开始，请等待下一局；已有玩家可用用户名和 PIN 重连")
 			return
 		}
 		if len(r.Members) >= 10 {
@@ -240,10 +316,15 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 		id, token := randomID(8), randomID(24)
 		r.Members = append(r.Members, member{ID: id, Name: in.Name, Avatar: in.Avatar})
 		r.Tokens[token] = id
+		if s.pinAuth {
+			r.Pins.Set(r.Code, in.Name, in.PIN, token)
+		}
 		if len(r.Members) == 1 {
 			r.Host = id
 		}
-		roomCookie(w, q, r.Code, token)
+		if !s.pinAuth {
+			roomCookie(w, q, r.Code, token)
+		}
 		respond(w, 200, r.view(id))
 		return
 	}
@@ -311,7 +392,7 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 
 	case "leave", "kick":
 		if r.Game != nil && r.Game.Phase != finished {
-			fail(w, 409, "游戏中保留席位，请使用原浏览器重新连接")
+			fail(w, 409, "游戏中保留席位，请使用用户名和 PIN 重新连接")
 			return
 		}
 		remove := index
@@ -338,6 +419,7 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 				delete(r.Tokens, token)
 			}
 		}
+		r.Pins.Prune(r.Tokens)
 		if len(r.Members) == 0 {
 			r.Host = ""
 			r.Game = nil

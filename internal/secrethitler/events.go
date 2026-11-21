@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/zpatronus/sidequests/internal/roomdb"
 )
 
 // notify runs under the server mutex; slow clients coalesce room changes.
@@ -28,11 +30,6 @@ func (s *server) events(w http.ResponseWriter, q *http.Request) {
 		return
 	}
 	code := strings.ToUpper(strings.TrimSpace(q.URL.Query().Get("code")))
-	credential, err := q.Cookie("sh_" + code)
-	if err != nil {
-		fail(w, 403, "请先加入房间")
-		return
-	}
 	s.mu.Lock()
 	r := s.rooms[code]
 	if r == nil || s.now().Sub(r.Active) >= roomIdleTTL {
@@ -40,18 +37,41 @@ func (s *server) events(w http.ResponseWriter, q *http.Request) {
 		fail(w, 404, "房间不存在或已过期")
 		return
 	}
-	r.Active = s.now()
+	var credential string
+	name, pin := q.URL.Query().Get("username"), q.URL.Query().Get("pin")
+	if s.pinAuth {
+		if roomdb.ValidLogin(name, pin) {
+			var status int
+			credential, status = r.Pins.Authenticate(code, name, pin, s.now())
+			if status != 0 {
+				s.mu.Unlock()
+				fail(w, status, roomdb.LoginError(status))
+				return
+			}
+		}
+	} else if cookie, err := q.Cookie("sh_" + code); err == nil {
+		credential = cookie.Value
+	}
+	if r.Tokens[credential] == "" {
+		s.mu.Unlock()
+		fail(w, 403, "请先加入房间")
+		return
+	}
+	now := s.now()
+	if s.storage != nil {
+		if err := s.storage.Touch(storageGame, code, now.Add(roomIdleTTL)); err != nil {
+			s.mu.Unlock()
+			fail(w, 503, "暂时无法连接房间")
+			return
+		}
+		r.activityDirty = false
+	}
+	r.Active = now
 	snapshot := func() ([]byte, bool) {
-		if s.rooms[code] == r && s.now().Sub(r.Active) >= roomIdleTTL {
-			delete(s.rooms, code)
-			r.notify()
+		if s.rooms[code] != r || !s.now().Before(roomExpiry(r)) {
 			return nil, false
 		}
-		if s.rooms[code] != r {
-			return nil, false
-		}
-		id := credential.Value
-		id = r.Tokens[id]
+		id := r.Tokens[credential]
 		if id == "" {
 			return nil, false
 		}
