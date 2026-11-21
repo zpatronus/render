@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 var ErrInUse = errors.New("room database already in use")
@@ -53,8 +53,9 @@ func Open(path string) (*Store, error) {
 		lock.Close()
 		return nil, err
 	}
-	dsn := url.URL{Scheme: "file", Path: path, RawQuery: "_journal_mode=WAL&_synchronous=FULL&_busy_timeout=3000&_secure_delete=on"}
-	db, err := sql.Open("sqlite3", dsn.String())
+	options := url.Values{"_pragma": {"busy_timeout(3000)", "journal_mode(WAL)", "synchronous(FULL)", "secure_delete(ON)"}}
+	dsn := url.URL{Scheme: "file", Path: path, RawQuery: options.Encode()}
+	db, err := sql.Open("sqlite", dsn.String())
 	if err != nil {
 		lock.Close()
 		return nil, err

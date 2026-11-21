@@ -10,7 +10,7 @@ Small games and tools in one Go service, deployable anywhere that runs Go.
 
 ## Local development
 
-Requires Go 1.23+ and a C compiler for the bundled SQLite driver. No frontend build tools are required.
+Requires Go 1.23+. SQLite works with `CGO_ENABLED=0`. No frontend build tools are required.
 
 ```sh
 SIDEQUESTS_DATA_DIR=./data go run .
@@ -39,7 +39,7 @@ Build with `go build -trimpath -o bin/server .` and run `./bin/server`. The serv
 
 Use `render.yaml`, or configure a Go web service with:
 
-- Build: `CGO_ENABLED=1 go build -trimpath -o bin/server .`
+- Build: `go build -trimpath -o bin/server .`
 - Storage: `SIDEQUESTS_STORAGE=memory`
 - Start: `./bin/server`
 - Health check: `/healthz`
@@ -55,7 +55,7 @@ Change `DEPLOY_VERSION`, commit, and push to `main`. The workflow runs tests and
 
 ### Deplexo
 
-Mount persistent storage at `/data` and build with `CGO_ENABLED=1` and a C compiler. Leave `SIDEQUESTS_STORAGE` unset to use SQLite.
+Mount persistent storage at `/data`. Leave `SIDEQUESTS_STORAGE` unset to use SQLite. The default Go build can open SQLite with CGO disabled.
 
 ## Adding an app
 
