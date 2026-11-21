@@ -488,7 +488,8 @@ function healHit(target,amount){
  heart?.animate([{transform:'scale(1)'},{transform:'scale(1.28)',offset:.45},{transform:'scale(1)'}],{duration:400,easing:'ease-out'});
 }
 
-let emojiCatalog=null,emojiLoading=null,recentEmoji=[];
+const emojiSendInterval=500;
+let emojiCatalog=null,emojiLoading=null,recentEmoji=[],lastEmojiSend=-Infinity;
 try{const saved=JSON.parse(localStorage.getItem('abr-emoji-recent')||'[]');if(Array.isArray(saved))recentEmoji=[...new Set(saved.filter(x=>typeof x==='string'))].slice(0,10)}catch{}
 async function toggleEmojiMenu(){
  if(!$('emoji-menu').hidden){closeEmojiMenu();return}
@@ -512,8 +513,11 @@ function drawEmojiMenu(){
 }
 async function sendEmoji(emoji,quick=false){
  if(!room?.game)return;
+ const now=performance.now();
+ if(now-lastEmojiSend<emojiSendInterval)return;
+ lastEmojiSend=now;
  const activeCode=room.code;
- try{await api('react',{code:activeCode,emoji});if(room?.code!==activeCode)return;recentEmoji=[emoji,...recentEmoji.filter(e=>e!==emoji)].slice(0,10);try{localStorage.setItem('abr-emoji-recent',JSON.stringify(recentEmoji))}catch{}if(!quick)drawQuickEmoji();}catch(error){message(error.message)}
+ try{await api('react',{code:activeCode,emoji},{background:true});if(room?.code!==activeCode)return;recentEmoji=[emoji,...recentEmoji.filter(e=>e!==emoji)].slice(0,10);try{localStorage.setItem('abr-emoji-recent',JSON.stringify(recentEmoji))}catch{}if(!quick)drawQuickEmoji();}catch(error){message(error.message)}
 }
 function positionEmojiMenu(){
  if($('emoji-menu').hidden)return;
